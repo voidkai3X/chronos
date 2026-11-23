@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHRONOS</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="logo">CHRONOS</span></div>
+  <div class="sub">AI-assisted trading research and backtesting on MyFundedPerps market data. Read-only public market data. No keys, no orders.</div>
+</header>
+
+<main class="wrap">
+  <section class="panel form-panel">
+    <form id="f" autocomplete="off">
+      <label class="lbl">Market</label>
+      <div class="ac">
+        <input id="market" type="text" placeholder="Search BTC, XAU, AAPL, EURUSD..." required>
+        <ul id="ac-list" class="ac-list" hidden></ul>
+      </div>
+      <div class="price-line"><span id="mkt-id" class="muted"></span><span id="price" class="price"></span></div>
+
+      <label class="lbl">Side</label>
+      <div class="toggle" id="side">
+        <button type="button" data-side="long" class="on long">Long</button>
+        <button type="button" data-side="short" class="short">Short</button>
+      </div>
+
+      <div class="grid3">
+        <div><label class="lbl">Entry</label><input id="entry" type="number" step="any" required></div>
+        <div><label class="lbl">Take profit</label><input id="tp" type="number" step="any" required></div>
+        <div><label class="lbl">Stop loss</label><input id="sl" type="number" step="any" required></div>
+      </div>
+      <div class="rr-line"><span>R:R</span><b id="rr">-</b><span id="rr-note" class="muted"></span></div>
+      <div id="lvl-err" class="inline-err" hidden></div>
+
+      <div class="grid2">
+        <div>
+          <label class="lbl">Test window: <b id="days-v">60</b> days</label>
+          <input id="days" type="range" min="30" max="60" step="1" value="60">
+        </div>
+        <div>
+          <label class="lbl">Order expiry</label>
+          <select id="expiry">
+            <option value="24h">24h</option><option value="48h">48h</option>
+            <option value="72h" selected>72h</option><option value="5d">5d</option><option value="7d">7d</option>
+          </select>
+        </div>
+      </div>
+      <label class="chk"><input id="trend" type="checkbox"> Trend filter (only place when 4h EMA50 slope agrees with the side)</label>
+
+      <button id="run" class="run" type="submit"><span class="spin" hidden></span><span class="txt">Run test</span></button>
+      <div id="form-err" class="err" hidden></div>
+    </form>
+    <div class="note">
+      How it works: your entry, stop and target are turned into a shape scaled by 4h ATR, then that shape is placed at
+      <b>every 4h close</b> (one order or trade at a time) and simulated on 15m MFP candles with MFP fees.
+      It tests the setup's shape, not the reason you took it (sweep, BOS, zone). If TP and SL hit in the same candle it counts as a loss.
+    </div>
+  </section>
+
+  <section class="results" id="results">
+    <div class="empty" id="empty">Enter a setup and run the test. A 60-day run takes a few seconds once candles are cached, longer the first time for a market.</div>
+    <div id="res" hidden>
+      <div class="res-head">
+        <div>
+          <div class="res-title" id="r-title"></div>
+          <div class="muted small" id="r-sub"></div>
+        </div>
+        <div class="badge" id="badge"></div>
+      </div>
+      <div class="verdict muted small" id="verdict"></div>
+      <div class="warn" id="warn" hidden></div>
+      <div class="cards" id="cards"></div>
+      <div class="panel chart-panel">
+        <div class="panel-h">Equity curve (cumulative R, after fees)</div>
+        <canvas id="chart" height="260"></canvas>
+      </div>
+      <div class="panel">
+        <div class="panel-h">Simulated trades <span class="muted small" id="t-count"></span></div>
+        <div class="tbl-wrap">
+          <table id="trades">
+            <thead><tr><th>#</th><th>Placed (WAT)</th><th>Filled (WAT)</th><th>Entry</th><th>Exit (WAT)</th><th>Exit price</th><th>Result</th><th class="r">R</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="muted small" id="meta"></div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">Backtest on past MFP candles only. Not a prediction, not advice.
+  <span class="muted">Limitation: it tests the setup's shape at every 4h close, not only where your pattern appears.</span></footer>
+<script src="/static/app.js"></script>
+</body>
+</html>

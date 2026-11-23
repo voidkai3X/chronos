@@ -1,0 +1,6 @@
+.venv
+candle_cache
+results
+*.log
+__pycache__
+.env
