@@ -44,6 +44,8 @@ python tester.py SOL long --entry=-1% --sl=-3% --tp 3R --json-out sol.json   # a
 # pattern mode: only trade retests of fresh supply/demand zones
 python tester.py AUDUSD short --entry 0.66629 --tp 0.65881 --sl 0.66833 --mode pattern --zone-tf 30m
 python tester.py EURUSD short --entry 1.11993 --tp 1.08353 --sl 1.12886 --mode pattern --zone-tf 4h --basket fx
+python tester.py EURUSD short --entry 1.11993 --tp 1.08353 --sl 1.12886 --compare GBPUSD,AUDUSD,USDJPY,USDCAD,USDCHF
+python tester.py HYPE long --entry 56.65 --tp 69.81 --sl 53.86 --compare BTC,ETH,SOL,XRP,BNB
 python tester.py EURUSD short --entry 1.11993 --tp 1.08353 --sl 1.12886 --mode pattern --symbols EURUSD,GBPUSD --sl-buffer-atr 0.5
 
 # entry styles on zone taps, and coaching
@@ -76,6 +78,7 @@ Level formats:
 | `--ref` | last close | Override the current price |
 | `--mode` | every-close | `every-close` or `pattern` |
 | `--basket` / `--symbols` | none | Also run on these markets and pool the results: `fx` (all MFP FX pairs) and/or a comma list. Works in both modes |
+| `--compare` | none | Rerun the same setup (ATR-scaled) on up to 5 other markets and print a comparison table plus a pooled row. Example: `--compare GBPUSD,AUDUSD,USDJPY`. Cannot be combined with `--basket` |
 
 Pattern-mode options:
 
@@ -208,6 +211,10 @@ The app is a thin wrapper around `tester.py`. It calls the engine with `--json -
 
 **Report:** zones found in the window, how many were touched, broken and traded, plus the same stats, stop-sweep check and 20-trade verdict as every-close mode. With `--basket`, it lists each market and then a pooled result over all trades. Other markets reuse your R:R and stop buffer in ATR, so nothing depends on their price level.
 
+### Compare on other pairs (`--compare`)
+
+After testing a setup on one market, `--compare M1,M2,...` reruns the same side, mode, entry style, R:R and stop/target (scaled by each market's own 4h ATR, the same transfer `--basket` uses) on up to 5 other markets. More than 5 names is rejected. The report lists the source market and each other pair (closed trades, win rate vs break-even, average R, total R, TP/SL/time exits, verdict, data source and days), a pooled row over all of them, and a one-line summary such as `works on 1 of 5, pooled no edge`. "Works" here means the engine's verdict was a possible edge or an edge on that sample (at least 20 closed trades and positive average R after fees). Suggestions in the web app default to the same family: FX majors for FX, other crypto perps for crypto, indices for indices, metals and energy for commodities (equities otherwise).
+
 ### Entry styles (pattern mode)
 
 All three use the same zones, the same 15m fill and exit engine, the same fees and your R:R for the target. Sweep and confirm only start watching when price first taps a fresh zone's near edge, then read **closed** `--confirm-tf` candles one at a time. Both enter at market on the next bar after the trigger candle closes.
@@ -251,6 +258,8 @@ Output includes orders, fills, unfilled orders, TP, SL and time exits; win rate 
 - **Orders never use future zones.** Every order's zone was confirmed at or before the order time, and it was untouched before then.
 - **Truncation.** Cutting off future candles does not change any pattern trade that had already finished.
 - **Hand-built retest.** A base, then a drop, then a rally back to the zone low. The order fills at the zone low with the stop above the zone, and it hits TP for exactly +2R. With the data cut before the drop candle closes, there is no zone and no order.
+
+`python tests/test_compare.py` runs offline checks for `--compare`: more than 5 other markets is rejected; transferred levels keep the same ATR shape and R:R at a different price and ATR; pooled closed trades, TP/SL/time exits and total R match the concatenated trade list; and the one-line summary counts only the other pairs.
 
 `python tests/test_entries.py` runs offline checks for the sweep and confirm entries:
 

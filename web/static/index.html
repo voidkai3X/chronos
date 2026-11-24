@@ -178,6 +178,31 @@
         <div class="ins-disc" id="ins-disc"></div>
       </div>
 
+      <div class="panel cmp-panel" id="cmp">
+        <div class="panel-h">
+          <span>Test on other pairs</span>
+          <span class="muted small">same setup, distances scaled by each pair's ATR, up to 5</span>
+        </div>
+        <p class="cmp-lead">See whether this setup holds on similar markets. Suggestions in the same group (FX majors, crypto perps, indices, or metals and energy) are pre-selected. You can change them.</p>
+        <div class="cmp-count" id="cmp-count">0 / 5 selected</div>
+        <div class="ac cmp-search">
+          <svg class="ac-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="cmp-q" type="search" placeholder="Search markets to add..." autocomplete="off" inputmode="search" aria-label="Search markets to compare">
+        </div>
+        <div class="cmp-list" id="cmp-list" role="group" aria-label="Other markets, maximum 5"></div>
+        <button id="cmp-run" class="run cmp-run" type="button"><span class="spin" hidden></span><span class="txt">Run on selected pairs</span></button>
+        <div id="cmp-err" class="err" role="alert" hidden></div>
+        <div class="cmp-skel" id="cmp-skel" hidden>
+          <span class="spin"></span>
+          <span id="cmp-skel-txt">Running the same setup on the selected pairs...</span>
+        </div>
+        <div id="cmp-out" hidden>
+          <div class="cmp-summary" id="cmp-summary"></div>
+          <div class="cmp-table" id="cmp-table" role="table" aria-label="Comparison by pair"></div>
+          <div class="cmp-cards" id="cmp-cards"></div>
+        </div>
+      </div>
+
       <div class="panel">
         <div class="panel-h"><span>Simulated trades</span><span class="muted small" id="t-count"></span></div>
         <div class="tbl-wrap">

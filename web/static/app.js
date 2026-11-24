@@ -1,6 +1,6 @@
 (() => {
 const $ = id => document.getElementById(id);
-let markets = [], side = "long", mode = "every-close", chosen = null, acIdx = -1, lastResult = null;
+let markets = [], side = "long", mode = "every-close", chosen = null, acIdx = -1, lastResult = null, lastRequest = null;
 
 const fmt = (x, d) => x == null ? "-" : Number(x).toLocaleString("en-US", {maximumFractionDigits: d ?? 6});
 const px = x => { if (x == null) return "-"; const a = Math.abs(x); return fmt(x, a >= 1000 ? 2 : a >= 1 ? 4 : 6); };
@@ -132,6 +132,7 @@ async function run() {
   const body = { market: mk, side, entry: +$("entry").value, tp: +$("tp").value, sl: +$("sl").value,
     days: +$("days").value, expiry: $("expiry").value, trend_filter: $("trend").checked, mode, insights: $("insights").checked };
   if (mode === "pattern") { body.zone_tf = $("zone-tf").value; body.entry_style = $("entry-style").value; if ($("sl-buf").value !== "") body.sl_buffer_atr = +$("sl-buf").value; }
+  lastRequest = body;
   setBusy(true);
   try {
     const r = await fetch("/api/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -193,6 +194,7 @@ function render(o) {
   renderInsights(o.insights);
   renderTrades(o.trades || []);
   drawChart(o.trades || []);
+  setupCompare(o);
 }
 function renderProvenance(d) {
   const el = $("provenance");
@@ -282,6 +284,151 @@ function drawChart(tr) {
 }
 function niceStep(x) { const p = Math.pow(10, Math.floor(Math.log10(x))), f = x / p; return (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * p; }
 window.addEventListener("resize", () => { if (lastResult) drawChart(lastResult.trades || []); });
+
+// ---------- compare on other pairs
+const CMP_LIMIT = 5;
+let cmpSelected = new Set(), cmpSuggested = new Set(), cmpBusy = false;
+
+function setupCompare(o) {
+  const panel = $("cmp");
+  if (!panel) return;
+  // only after a single-market result (a basket run already pooled several markets)
+  if (!o || o.per_market || o.compare_rows || !lastRequest) { panel.hidden = true; return; }
+  panel.hidden = false;
+  $("cmp-out").hidden = true; $("cmp-skel").hidden = true; $("cmp-err").hidden = true;
+  $("cmp-q").value = "";
+  const srcId = o.market.market_id;
+  const sameFam = markets.filter(m => m.market_id !== srcId && m.family && o.market && markets.find(x => x.market_id === srcId)?.family === m.family);
+  fetch("/api/compare-suggest?market=" + encodeURIComponent(srcId)).then(r => r.json()).then(j => {
+    const ids = (j.suggestions || []).map(s => s.market_id);
+    cmpSuggested = new Set(ids);
+    cmpSelected = new Set(ids.slice(0, CMP_LIMIT));
+    renderCmpList();
+  }).catch(() => {
+    cmpSuggested = new Set(sameFam.slice(0, CMP_LIMIT).map(m => m.market_id));
+    cmpSelected = new Set(cmpSuggested);
+    renderCmpList();
+  });
+  renderCmpList();
+}
+function cmpMatches(m, q) {
+  if (!q) return true;
+  return (m.symbol + " " + m.coin + " " + m.market_id + " " + (m.family_label || m.family || "")).toUpperCase().includes(q);
+}
+function renderCmpList() {
+  const srcId = lastResult && lastResult.market && lastResult.market.market_id;
+  const q = ($("cmp-q").value || "").trim().toUpperCase();
+  const others = markets.filter(m => m.market_id !== srcId);
+  others.sort((a, b) => {
+    const as = cmpSuggested.has(a.market_id), bs = cmpSuggested.has(b.market_id);
+    if (as !== bs) return bs - as;
+    const af = a.family === (markets.find(x => x.market_id === srcId) || {}).family;
+    const bf = b.family === (markets.find(x => x.market_id === srcId) || {}).family;
+    if (af !== bf) return bf - af;
+    return (a.symbol || "").localeCompare(b.symbol || "");
+  });
+  const shown = others.filter(m => cmpMatches(m, q) || cmpSelected.has(m.market_id)).slice(0, 80);
+  const full = cmpSelected.size >= CMP_LIMIT;
+  $("cmp-list").innerHTML = shown.map(m => {
+    const on = cmpSelected.has(m.market_id);
+    const dis = !on && full;
+    const sug = cmpSuggested.has(m.market_id) ? `<span class="sug">suggested</span>` : "";
+    return `<label class="cmp-item ${on ? "is-on" : ""} ${dis ? "is-off" : ""}">
+      <input type="checkbox" data-id="${m.market_id}" ${on ? "checked" : ""} ${dis ? "disabled" : ""}>
+      <span class="box" aria-hidden="true"></span>
+      <span><span class="nm">${esc(m.symbol)}</span>${sug}
+        <span class="meta">${esc(m.family_label || m.asset_class || "")} · ${esc(m.market_id)}</span></span>
+    </label>`;
+  }).join("") || `<div class="muted" style="padding:10px">No markets match that search.</div>`;
+  $("cmp-count").textContent = `${cmpSelected.size} / ${CMP_LIMIT} selected`;
+  $("cmp-run").disabled = cmpBusy || cmpSelected.size === 0;
+}
+$("cmp-q").addEventListener("input", renderCmpList);
+$("cmp-list").addEventListener("change", e => {
+  const inp = e.target.closest("input[data-id]");
+  if (!inp) return;
+  if (inp.checked) {
+    if (cmpSelected.size >= CMP_LIMIT) { inp.checked = false; return; }
+    cmpSelected.add(inp.dataset.id);
+  } else cmpSelected.delete(inp.dataset.id);
+  renderCmpList();
+});
+function shortVerdict(v) {
+  v = v || "";
+  if (v.startsWith("too few")) return "too few samples";
+  if (v.startsWith("no edge")) return "no edge";
+  if (v.startsWith("possible edge")) return "possible edge";
+  if (v.startsWith("edge")) return "edge on this sample";
+  return v;
+}
+function cmpWin(r) {
+  if (r.win_rate == null) return "n/a";
+  return `${pct(r.win_rate)} vs ${pct(r.breakeven_win_rate)}`;
+}
+function renderCmpResults(o) {
+  $("cmp-out").hidden = false;
+  $("cmp-summary").textContent = o.compare_summary || "";
+  const rows = (o.compare_rows || []).concat(o.compare_pooled ? [o.compare_pooled] : []);
+  const head = `<div class="cmp-thead" role="row">
+    <span>Pair</span><span class="cmp-r">Closed</span><span class="cmp-r">Win vs BE</span>
+    <span class="cmp-r">Avg R</span><span class="cmp-r">Total R</span><span class="cmp-r">TP/SL/time</span>
+    <span>Verdict</span><span>Data</span></div>`;
+  $("cmp-table").innerHTML = head + rows.map(r => {
+    const name = r.role === "pooled" ? "Pooled" : (r.symbol || r.market_id);
+    const cls = r.role === "pooled" ? "pooled" : (r.role === "source" ? "source" : "");
+    return `<div class="cmp-row ${cls}" role="row">
+      <div class="cmp-pair"><span class="pair-name">${esc(name)}</span>${r.role !== "pooled" ? `<span class="pair-id">${esc(r.market_id)}</span>` : ""}</div>
+      <div class="cmp-r">${r.closed}</div>
+      <div class="cmp-r">${cmpWin(r)}</div>
+      <div class="cmp-r ${r.avg_r_net > 0 ? "pos" : r.avg_r_net < 0 ? "neg" : ""}">${sgnR(r.avg_r_net)}</div>
+      <div class="cmp-r ${r.total_r_net > 0 ? "pos" : r.total_r_net < 0 ? "neg" : ""}">${sgnR(r.total_r_net)}</div>
+      <div class="cmp-r">${r.tp}/${r.sl}/${r.time_exits}</div>
+      <div class="cmp-verdict">${esc(shortVerdict(r.verdict))}</div>
+      <div class="cmp-data">${esc(r.data_short || "")}</div>
+    </div>`;
+  }).join("");
+  $("cmp-cards").innerHTML = rows.map(r => {
+    const name = r.role === "pooled" ? "Pooled" : (r.symbol || r.market_id);
+    const role = r.role === "source" ? "source" : r.role === "pooled" ? "pooled" : "";
+    return `<div class="cmp-card ${r.role === "pooled" ? "pooled" : ""}">
+      <h4>${esc(name)}${role ? `<span class="role">${role}</span>` : ""}</h4>
+      ${r.role !== "pooled" ? `<div class="dat">${esc(r.market_id)}</div>` : ""}
+      <div class="grid">
+        <div><div class="k">Closed</div><div class="v">${r.closed}</div></div>
+        <div><div class="k">Win vs BE</div><div class="v">${cmpWin(r)}</div></div>
+        <div><div class="k">Avg R</div><div class="v ${r.avg_r_net > 0 ? "pos" : r.avg_r_net < 0 ? "neg" : ""}">${sgnR(r.avg_r_net)}</div></div>
+        <div><div class="k">Total R</div><div class="v ${r.total_r_net > 0 ? "pos" : r.total_r_net < 0 ? "neg" : ""}">${sgnR(r.total_r_net)}</div></div>
+        <div><div class="k">TP / SL / time</div><div class="v">${r.tp} / ${r.sl} / ${r.time_exits}</div></div>
+      </div>
+      <div class="ver">${esc(shortVerdict(r.verdict))}</div>
+      <div class="dat">${esc(r.data_short || "")}</div>
+    </div>`;
+  }).join("");
+}
+$("cmp-run").addEventListener("click", async () => {
+  if (cmpBusy || !lastRequest || cmpSelected.size === 0) return;
+  if (cmpSelected.size > CMP_LIMIT) return;
+  const body = Object.assign({}, lastRequest, { compare: [...cmpSelected], insights: false });
+  cmpBusy = true; $("cmp-run").disabled = true;
+  $("cmp-run").querySelector(".spin").hidden = false;
+  $("cmp-run").querySelector(".txt").textContent = "Running comparison...";
+  $("cmp-err").hidden = true; $("cmp-out").hidden = true; $("cmp-skel").hidden = false;
+  $("cmp-skel-txt").textContent = `Running the same setup on ${cmpSelected.size} other pair${cmpSelected.size === 1 ? "" : "s"}...`;
+  try {
+    const r = await fetch("/api/compare", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const j = await r.json().catch(() => ({ error: "Server returned an invalid response (" + r.status + ")" }));
+    if (!r.ok || j.error) throw new Error(j.error || ("HTTP " + r.status));
+    renderCmpResults(j);
+  } catch (err) {
+    $("cmp-err").hidden = false; $("cmp-err").textContent = err.message;
+    toast(err.message);
+  } finally {
+    cmpBusy = false; $("cmp-skel").hidden = true;
+    $("cmp-run").querySelector(".spin").hidden = true;
+    $("cmp-run").querySelector(".txt").textContent = "Run on selected pairs";
+    renderCmpList();
+  }
+});
 
 // ---------- prefill from URL (?market=BTC&side=short&entry=..&tp=..&sl=..&run=1)
 function applyQuery() {

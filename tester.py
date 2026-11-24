@@ -6,6 +6,7 @@ Read-only. Uses only the public, keyless MFP market-data WebSocket. Never places
   python tester.py BTC long --entry 81000 --tp 83500 --sl 80200 [--days 60] [--interval 15m] [--expiry 72h]
   python tester.py XAUUSDT short --entry +0.5% --tp 3R --sl +1.2%      (percent / R form)
   python tester.py AUDUSD short --entry 0.66629 --tp 0.65881 --sl 0.66833 --mode pattern --zone-tf 30m [--basket fx]
+  python tester.py EURUSD short --entry 1.11993 --tp 1.08353 --sl 1.12886 --compare GBPUSD,AUDUSD,USDJPY,USDCAD,USDCHF
 
 Modes: every-close (default) places the setup's ATR shape at every 4h close when flat.
        pattern only trades retests of fresh supply/demand zones found by rule (see detect_zones).
@@ -194,6 +195,20 @@ def build_geometry(side, entry, tp, sl, ref, atr):
                 # relative geometry
                 entry_atr=(entry - ref) / atr, risk_atr=risk / atr, reward_atr=reward / atr,
                 entry_pct=(entry / ref - 1) * 100, risk_pct=risk / entry * 100, reward_pct=reward / entry * 100)
+
+
+def transfer_geometry(g_user, ref, atr_now, market_id=None):
+    """Same setup shape in 4h-ATR units, expressed at another market's price and ATR.
+
+    Used by --basket and --compare so other pairs keep the same entry distance, stop and
+    target in ATR (and the same R:R), not the original pair's price levels.
+    """
+    e = ref + g_user["entry_atr"] * atr_now
+    g = build_geometry(g_user["side"], e, e + g_user["sgn"] * g_user["reward_atr"] * atr_now,
+                       e - g_user["sgn"] * g_user["risk_atr"] * atr_now, ref, atr_now)
+    if market_id:
+        g["market_id"] = market_id
+    return g
 
 
 # ---------------------------------------------------------------- replay
@@ -884,6 +899,206 @@ def parse_basket(spec, markets):
     return out
 
 
+COMPARE_LIMIT = 5
+
+# Suggestion groups: same family first, then a preferred-majors order so defaults feel familiar.
+_INDEX_KEYS = {"SP500", "XYZ100", "JP225", "DJI", "QQQ", "QQQUSDT"}
+_COMMODITY_KEYS = {"XAUUSDT", "XAGUSDT", "XPDUSDT", "XPTUSDT", "CLUSDT", "COPPERUSDT", "NATGASUSDT",
+                   "XAU", "XAG", "XPD", "XPT", "CL", "COPPER", "NATGAS", "BRENTOIL", "BRENT"}
+FAMILY_LABEL = {"forex": "FX majors", "crypto": "crypto perps", "index": "indices",
+                "commodity": "metals and energy", "equity": "equities"}
+_FAMILY_PREF = {
+    "forex": ["EURUSD", "GBPUSD", "AUDUSD", "USDJPY", "USDCAD", "USDCHF"],
+    "crypto": ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT", "DOGEUSDT", "ADAUSDT", "AVAXUSDT", "LINKUSDT", "SUIUSDT"],
+    "index": ["SP500", "XYZ100", "DJI", "JP225", "QQQ"],
+    "commodity": ["XAUUSDT", "XAGUSDT", "CLUSDT", "BRENTOIL", "NATGASUSDT", "COPPERUSDT", "XPTUSDT", "XPDUSDT"],
+    "equity": ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA"],
+}
+
+
+def _market_keys(m):
+    coin = m["coin"].upper()
+    bare = coin.split(":")[-1]
+    return {coin, bare, m["symbol"].upper(), bare.replace("USDT", "")}
+
+
+def market_family(m):
+    """Finer grouping than asset_class, used to suggest similar pairs for --compare."""
+    if m["provider"] == "veranta" or asset_class(m) == "forex":
+        return "forex"
+    keys = _market_keys(m)
+    if keys & _INDEX_KEYS:
+        return "index"
+    if keys & _COMMODITY_KEYS:
+        return "commodity"
+    if asset_class(m) == "crypto":
+        return "crypto"
+    return "equity"
+
+
+def _pref_rank(m, family):
+    keys = _market_keys(m)
+    for i, p in enumerate(_FAMILY_PREF.get(family, [])):
+        pu = p.upper()
+        if pu in keys or pu + "USDT" in keys:
+            return i
+    return 1000
+
+
+def suggest_compare(source, markets, n=COMPARE_LIMIT):
+    """Up to n other markets in the same family (FX majors, crypto perps, indices, metals/energy, equities)."""
+    src = source if isinstance(source, dict) else resolve_market(source, markets)
+    fam = market_family(src)
+    others = [m for m in markets if m["market_id"] != src["market_id"] and market_family(m) == fam]
+    others.sort(key=lambda m: (_pref_rank(m, fam), m["symbol"].upper(), m["market_id"]))
+    return others[:n]
+
+
+def parse_compare(spec, markets, source=None):
+    """Parse a comma list of up to COMPARE_LIMIT other markets. Raises ValueError on a bad list."""
+    parts = [p.strip() for p in str(spec or "").split(",") if p.strip()]
+    if not parts:
+        raise ValueError("--compare needs a comma-separated list of at most "
+                         f"{COMPARE_LIMIT} other markets")
+    if len(parts) > COMPARE_LIMIT:
+        raise ValueError(f"--compare accepts at most {COMPARE_LIMIT} other markets (got {len(parts)})")
+    src_id = (source["market_id"] if isinstance(source, dict) else None)
+    seen, out = set(), []
+    for part in parts:
+        if part.lower() in BASKETS:
+            raise ValueError(f"--compare takes market names, not basket shortcuts like '{part}'")
+        try:
+            m = resolve_market(part, markets)
+        except SystemExit as e:
+            raise ValueError(str(e)) from None
+        if src_id and m["market_id"] == src_id:
+            raise ValueError(f"--compare is for other markets; {m['market_id']} is the setup's own market")
+        if m["market_id"] in seen:
+            continue
+        seen.add(m["market_id"])
+        out.append(m)
+    if not out:
+        raise ValueError("--compare needs at least one other market")
+    return out
+
+
+def pair_works(result):
+    """True when the engine called a positive edge with enough samples (not 'too few' or 'no edge')."""
+    v = (result or {}).get("verdict") or ""
+    return v.startswith("possible edge") or v.startswith("edge ")
+
+
+def short_verdict(result):
+    v = (result or {}).get("verdict") or ""
+    if v.startswith("too few"):
+        return "too few samples"
+    if v.startswith("no edge"):
+        return "no edge"
+    if v.startswith("possible edge"):
+        return "possible edge"
+    if v.startswith("edge "):
+        return "edge on this sample"
+    return v or "n/a"
+
+
+def _short_data(r):
+    d = r.get("data") or {}
+    pv = d.get("provenance") or {}
+    segs = pv.get("segments") or []
+    labels = []
+    for s in segs:
+        lab = (s.get("label") or s.get("source") or "").split(":")[0]
+        if lab.lower() == "mfp":
+            lab = "MFP"
+        if lab and lab not in labels:
+            labels.append(lab)
+    bit = " + ".join(labels) or "n/a"
+    days, covered = d.get("days"), pv.get("days_covered")
+    if days is not None:
+        bit += f", {days}d tested"
+    if covered is not None:
+        bit += f", {covered:g}d loaded"
+    return bit
+
+
+def compare_row(r, role="compare"):
+    s = r["result"]
+    d = r.get("data") or {}
+    pv = d.get("provenance") or {}
+    mid = r["market"]["market_id"]
+    return dict(market_id=mid, symbol=r["market"].get("symbol") or mid.split("|")[-1],
+                coin=r["market"].get("coin"), role=role,
+                closed=s["closed"], win_rate=s["win_rate"], breakeven_win_rate=s["breakeven_win_rate"],
+                avg_r_net=s["avg_r_net"], total_r_net=s["total_r_net"],
+                tp=s["tp"], sl=s["sl"], time_exits=s["time_exits"], verdict=s["verdict"],
+                works=pair_works(s), days=d.get("days"), days_covered=pv.get("days_covered"),
+                data_short=_short_data(r), provenance_text=d.get("provenance_text", ""))
+
+
+def compare_summary(rows, pooled_result):
+    """One-line plain summary, e.g. 'works on 1 of 5, pooled no edge'."""
+    others = [r for r in rows if r.get("role") == "compare"]
+    n = len(others)
+    k = sum(1 for r in others if r.get("works"))
+    return f"works on {k} of {n}, pooled {short_verdict(pooled_result)}"
+
+
+def attach_compare(out, source_id):
+    """Add compare_rows, compare_summary and a compact pooled row to a multi-market run."""
+    rows = []
+    for r in out.get("per_market") or []:
+        mid = r["market"]["market_id"]
+        rows.append(compare_row(r, "source" if mid == source_id else "compare"))
+    pooled = dict(market_id="pooled", symbol="Pooled", coin=None, role="pooled",
+                  closed=out["result"]["closed"], win_rate=out["result"]["win_rate"],
+                  breakeven_win_rate=out["result"]["breakeven_win_rate"],
+                  avg_r_net=out["result"]["avg_r_net"], total_r_net=out["result"]["total_r_net"],
+                  tp=out["result"]["tp"], sl=out["result"]["sl"], time_exits=out["result"]["time_exits"],
+                  verdict=out["result"]["verdict"], works=pair_works(out["result"]),
+                  days=None, days_covered=None, data_short="all compared markets", provenance_text="")
+    out["compare"] = [r["market_id"] for r in rows if r["role"] == "compare"]
+    out["compare_rows"] = rows
+    out["compare_pooled"] = pooled
+    out["compare_summary"] = compare_summary(rows, out["result"])
+    return out
+
+
+def compare_report(out):
+    p, s = out["params"], out["result"]
+    L = [f"COMPARE test ({p['mode']} mode" + (f", {p.get('entry_style', 'limit')} entry" if p['mode'] == 'pattern' else "")
+         + f"), {out['setup']['side'].upper()}, levels taken from {out['market']['market_id']}, "
+         + f"{len(out.get('compare') or [])} other market(s). "
+         + (f"Zones on {p['zone_tf']}, SL {p['sl_buffer_atr']:.2f} ATR past the zone, TP {out['setup']['rr']:.2f}R. "
+            if p['mode'] == 'pattern' else "")
+         + f"Summary: {out['compare_summary']}.", ""]
+    L.append(f"  {'pair':<18} {'role':<8} {'closed':>6} {'win':>5} {'BE':>5} {'avgR':>7} {'totR':>7} {'TP':>3} {'SL':>3} {'time':>4}  verdict")
+    for r in out["compare_rows"] + [out["compare_pooled"]]:
+        wr = "n/a" if r["win_rate"] is None else f"{r['win_rate']*100:.0f}%"
+        be = "n/a" if r["breakeven_win_rate"] is None else f"{r['breakeven_win_rate']*100:.0f}%"
+        L.append(f"  {r['market_id']:<18} {r['role']:<8} {r['closed']:>6} {wr:>5} {be:>5} "
+                 f"{r['avg_r_net']:>+7.2f} {r['total_r_net']:>+7.1f} {r['tp']:>3} {r['sl']:>3} {r['time_exits']:>4}  "
+                 f"{short_verdict(r)}")
+    L += ["", "POOLED (source + compared markets, trades in exit-time order):"] + (
+        [f"Zones found in window: {out['zones']['zones_found']}, traded (filled) {out['zones']['zones_traded']}."]
+        if out.get("zones") else [])
+    L += result_lines(s, p)
+    L += ["", "Data per market:"]
+    for r in out["per_market"]:
+        L.append(f"  {r['market']['market_id']}: {r['data'].get('provenance_text', '')}")
+    L += ["", f"Verdict (pooled): {s['verdict']}.",
+          f"Summary: {out['compare_summary']}.",
+          "Backtest on past candles only. Not a prediction, not advice."]
+    return "\n".join(L)
+
+
+def _extra_markets(basket, markets):
+    if not basket:
+        return []
+    if isinstance(basket, list):
+        return list(basket)
+    return parse_basket(basket, markets)
+
+
 def run_market(m, a, g_user, mode, end_ms, start_ms, warm, expiry, sl_buffer, sl_src, zone_params):
     """Run one market. g_user is the user's setup; other markets get the same shape in ATR units."""
     base = fetch_candles(m, a.interval, start_ms - warm, end_ms, refresh=a.refresh)
@@ -899,10 +1114,7 @@ def run_market(m, a, g_user, mode, end_ms, start_ms, warm, expiry, sl_buffer, sl
     if m["market_id"] == g_user["market_id"]:
         g = dict(g_user)
     else:  # same geometry in 4h-ATR units from this market's own price
-        e = ref + g_user["entry_atr"] * atr_now
-        g = build_geometry(g_user["side"], e, e + g_user["sgn"] * g_user["reward_atr"] * atr_now,
-                           e - g_user["sgn"] * g_user["risk_atr"] * atr_now, ref, atr_now)
-        g["market_id"] = m["market_id"]
+        g = transfer_geometry(g_user, ref, atr_now, m["market_id"])
         if a.ref is not None:
             g["ref"] = ref
     cls = asset_class(m)
@@ -987,6 +1199,9 @@ def main(argv=None):
                     help="explain the result in plain words and re-run limit / wider SL / sweep / confirm variants to compare")
     ap.add_argument("--basket", "--symbols", dest="basket", default=None,
                     help="also run on these markets and pool them: 'fx' (all MFP FX) and/or a comma list, e.g. fx or EURUSD,GBPUSD")
+    ap.add_argument("--compare", default=None,
+                    help="rerun the same setup (ATR-scaled) on up to 5 other markets and compare them, "
+                         "e.g. GBPUSD,AUDUSD,USDJPY,USDCAD,USDCHF. Cannot be combined with --basket")
     ap.add_argument("--ref", type=float, help="override current price")
     ap.add_argument("--no-fees", action="store_true")
     ap.add_argument("--refresh", action="store_true", help="ignore candle cache")
@@ -1028,13 +1243,24 @@ def main(argv=None):
     if mode == "pattern":
         sl_buffer, sl_src, zatr_now = pattern_sl_buffer(a, ctx)
         g["zone_tf_atr_now"] = zatr_now
-    out, trades = run_setup(a, mode, ctx, sl_buffer, sl_src, a.basket)
+    if a.compare and a.basket:
+        raise SystemExit("use --compare or --basket, not both")
+    try:
+        extras = parse_compare(a.compare, markets, m) if a.compare else a.basket
+    except ValueError as e:
+        raise SystemExit(str(e)) from None
+    out, trades = run_setup(a, mode, ctx, sl_buffer, sl_src, extras)
+    if a.compare:
+        attach_compare(out, m["market_id"])
     if a.insights:
         import insights
         out["insights"] = insights.build(a, mode, ctx, out, trades, sl_buffer, sl_src)
-        txt = (text_report(out) if "per_market" not in out else basket_report(out)) + "\n\n" + insights.text(out["insights"])
+        body = (text_report(out) if "per_market" not in out
+                else (compare_report(out) if a.compare else basket_report(out)))
+        txt = body + "\n\n" + insights.text(out["insights"])
     else:
-        txt = text_report(out) if "per_market" not in out else basket_report(out)
+        txt = (text_report(out) if "per_market" not in out
+               else (compare_report(out) if a.compare else basket_report(out)))
     if a.json_out:
         json.dump(dict(out, trades=trades), open(a.json_out, "w"), indent=1)
     print(json.dumps(out, indent=1) if a.json else txt)
@@ -1061,7 +1287,7 @@ def run_setup(a, mode, ctx, sl_buffer, sl_src, basket):
     expiry_s = a.expiry or ("30d" if mode == "pattern" else "72h")
     expiry = parse_dur(expiry_s)
     style = a.entry_style if mode == "pattern" else "limit"
-    targets = [m] + [x for x in parse_basket(basket, markets) if x["market_id"] != m["market_id"]]
+    targets = [m] + [x for x in _extra_markets(basket, markets) if x["market_id"] != m["market_id"]]
     runs = []
     for mk in targets:
         try:

@@ -1,6 +1,6 @@
 # CHRONOS web app
 
-A small web front end for `../tester.py`. You pick an MFP market, a side, entry, TP and SL, and a mode: Every 4h close or Pattern only (fresh supply/demand zone retests, with a zone-timeframe picker). The page runs the engine and shows the verdict, stats, a cumulative-R equity curve and every simulated trade.
+A small web front end for `../tester.py`. You pick an MFP market, a side, entry, TP and SL, and a mode: Every 4h close or Pattern only (fresh supply/demand zone retests, with a zone-timeframe picker). The page runs the engine and shows the verdict, stats, a cumulative-R equity curve and every simulated trade. After a single-pair result, a "Test on other pairs" section lets you pick up to 5 similar markets (suggestions pre-selected) and compare the same setup on them.
 
 The CLI is unchanged. The web app calls `tester.py --json --json-out` in a subprocess and returns that JSON. `app.py` loads the engine from the repository root (the parent of this `web/` directory).
 
@@ -19,7 +19,8 @@ python3 -m venv .venv
 Environment variables:
 - `PORT`: default 8080
 - `HOST`: default 0.0.0.0
-- `TESTER_TIMEOUT`: seconds per backtest, default 150
+- `TESTER_TIMEOUT`: seconds per backtest, default 240
+- `COMPARE_TIMEOUT`: seconds for a compare run (up to 6 markets); default is `max(TESTER_TIMEOUT, 120 * markets)`
 - `TESTER_MAX_PARALLEL`: concurrent backtests, default 2
 
 Candles are cached in `../candle_cache/` (shared with the CLI). The first run on a market fetches about 74 days of 15m bars and takes a few seconds to a minute. Repeat runs take under a second.
@@ -37,7 +38,7 @@ Candles are cached in `../candle_cache/` (shared with the CLI). The first run on
   ```
   - Validation:
     - A long needs `sl < entry < tp`. A short needs `tp < entry < sl`.
-    - `days` must be from 30 to 60.
+    - `days` must be from 30 to 90.
     - `expiry` must be from 1h to 14d. It is only used in every-close mode.
     - `mode` is `every-close` (default) or `pattern`. `zone_tf` (30m, 1h or 4h) and `sl_buffer_atr` (0-10, or omit for auto) apply to pattern mode only.
     - `entry_style` is `limit` (default), `sweep` or `confirm`, and works in pattern mode only.
@@ -48,6 +49,9 @@ Candles are cached in `../candle_cache/` (shared with the CLI). The first run on
     - 422 for an engine error, such as not enough history
     - 429 when the server is busy
     - 504 on timeout
+
+- `GET /api/compare-suggest?market=EURUSD` returns up to 5 suggested other markets in the same family (FX majors, crypto perps, indices, metals and energy, or equities), plus `family` and `limit` (5).
+- `POST /api/compare` takes the same body as `/api/test`, plus `compare`: a list of 1 to 5 other market names. Insights are not run (too much extra work). The same setup is ATR-scaled onto each market, sequentially. Response is the engine's compare JSON: `compare_rows` (source + others), `compare_pooled`, `compare_summary` (for example `works on 1 of 5, pooled no edge`), `per_market`, `result`, `trades` and `elapsed_s`. More than 5 names returns 400.
 
 You can also prefill the page from the URL. Adding `run=1` runs the test straight away:
 
