@@ -46,6 +46,15 @@
         </div>
       </div>
 
+      <div id="style-opts" hidden>
+        <label class="lbl">Entry style</label>
+        <select id="entry-style">
+          <option value="limit" selected>Limit at the zone edge (blind, first retest)</option>
+          <option value="sweep">Wait for a sweep of the zone's far edge, enter on the close back inside</option>
+          <option value="confirm">Wait for a 15m break of structure after the tap</option>
+        </select>
+      </div>
+
       <div class="grid3">
         <div><label class="lbl">Entry</label><input id="entry" type="number" step="any" required></div>
         <div><label class="lbl">Take profit</label><input id="tp" type="number" step="any" required></div>
@@ -68,6 +77,7 @@
         </div>
       </div>
       <label class="chk"><input id="trend" type="checkbox"> Trend filter (only place when 4h EMA50 slope agrees with the side)</label>
+      <label class="chk"><input id="insights" type="checkbox" checked> Insights: explain the result and compare limit / wider stop / sweep / confirm entries (a few seconds more)</label>
 
       <button id="run" class="run" type="submit"><span class="spin" hidden></span><span class="txt">Run test</span></button>
       <div id="form-err" class="err" hidden></div>
@@ -78,7 +88,10 @@
       <b>Pattern only:</b> the tester finds supply zones (for shorts) or demand zones (for longs) by rule: 1-6 small
       candles, then a strong move of at least 1 ATR away. When price is away from a fresh zone it rests a limit at the
       zone's near edge, stop beyond the far edge, target at your R:R. Only candles already closed are used.<br>
-      Both are simulated on 15m MFP candles with MFP fees. If TP and SL hit in the same candle it counts as a loss.
+      <b>Entry styles (pattern only):</b> <i>sweep</i> waits for price to poke past the zone's far edge (where stops sit)
+      and close back inside; <i>confirm</i> waits for a 15m candle to close through the last 15m swing after the tap.
+      Both put the stop beyond the move's extreme and the zone.<br>
+      Both modes are simulated on 15m MFP candles with MFP fees. If TP and SL hit in the same candle it counts as a loss.
     </div>
   </section>
 
@@ -95,6 +108,19 @@
       <div class="verdict muted small" id="verdict"></div>
       <div class="warn" id="warn" hidden></div>
       <div class="cards" id="cards"></div>
+      <div class="panel ins-panel" id="ins" hidden>
+        <div class="panel-h">Insights <span class="muted small">rule-based, from this test's own numbers</span></div>
+        <ul class="ins-list" id="ins-list"></ul>
+        <div class="panel-h sub-h">What-if comparison <span class="muted small" id="ins-note"></span></div>
+        <div class="tbl-wrap"><table id="ins-tbl">
+          <thead><tr><th>Variant</th><th>Scope</th><th class="r">SL beyond zone</th><th class="r">Closed</th><th class="r">TP/SL/time</th>
+            <th class="r">Win</th><th class="r">Break-even</th><th class="r">Avg R</th><th class="r">Total R</th><th class="r">t</th><th>Evidence</th></tr></thead>
+          <tbody></tbody></table></div>
+        <div class="ins-best" id="ins-best"></div>
+        <div class="panel-h sub-h">Suggested fixes</div>
+        <ul class="ins-fixes" id="ins-fixes"></ul>
+        <div class="ins-disc" id="ins-disc"></div>
+      </div>
       <div class="panel chart-panel">
         <div class="panel-h">Equity curve (cumulative R, after fees)</div>
         <canvas id="chart" height="260"></canvas>

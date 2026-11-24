@@ -45,6 +45,11 @@ python tester.py SOL long --entry=-1% --sl=-3% --tp 3R --json-out sol.json   # a
 python tester.py AUDUSD short --entry 0.66629 --tp 0.65881 --sl 0.66833 --mode pattern --zone-tf 30m
 python tester.py EURUSD short --entry 1.11993 --tp 1.08353 --sl 1.12886 --mode pattern --zone-tf 4h --basket fx
 python tester.py EURUSD short --entry 1.11993 --tp 1.08353 --sl 1.12886 --mode pattern --symbols EURUSD,GBPUSD --sl-buffer-atr 0.5
+
+# entry styles on zone taps, and coaching
+python tester.py AUDUSD short --entry 0.66629 --tp 0.65881 --sl 0.66833 --mode pattern --zone-tf 30m --entry-style sweep
+python tester.py AUDUSD short --entry 0.66629 --tp 0.65881 --sl 0.66833 --mode pattern --zone-tf 30m --entry-style confirm --confirm-tf 15m
+python tester.py AUDUSD short --entry 0.66629 --tp 0.65881 --sl 0.66833 --mode pattern --zone-tf 30m --insights
 ```
 
 Market names resolve against `/v1/markets`, so `BTC`, `BTCUSDT`, `binance|BTCUSDT`, `AAPL` and `xyz:AAPL` all work.
@@ -84,6 +89,18 @@ Pattern-mode options:
 | `--max-base` | 6 | Most base candles in a zone (1-6) |
 | `--base-body-atr` | 0.5 | Largest body a base candle may have, in ATR |
 | `--trend-filter` | off | Only place when the 4h EMA50 slope agrees with the side (same rule as every-close mode) |
+| `--entry-style` | limit | `limit` (blind limit at the zone's near edge), `sweep` or `confirm` (see "Entry styles" below) |
+| `--confirm-tf` | 15m | sweep/confirm: timeframe whose closes are read for the trigger. Between `--interval` and `--zone-tf` |
+| `--trigger-window` | 12 zone-tf bars | sweep/confirm: give up this long after the tap |
+| `--sweep-min-atr` | 0.1 | sweep: how far past the far edge price must trade, in zone-tf ATR |
+| `--sweep-max-atr` | 1.5 | sweep: further than this past the far edge is a breakout, not a sweep, so the setup is cancelled |
+| `--skip-strong-atr` | off | sweep/confirm: cancel if a zone-tf candle with a body at least this many ATR closes against the trade on the way in |
+
+Coaching:
+
+| Option | Default | Meaning |
+|---|---|---|
+| `--insights` | off | Print plain-English findings, a what-if comparison (limit / wider SL / sweep / confirm, on the market and on a basket) and suggested fixes. Included in `--json` output under `insights` |
 
 ## Run the web app
 
@@ -155,6 +172,37 @@ The app is a thin wrapper around `tester.py`. It calls the engine with `--json -
 
 **Report:** zones found in the window, how many were touched, broken and traded, plus the same stats, stop-sweep check and 20-trade verdict as every-close mode. With `--basket`, it lists each market and then a pooled result over all trades. Other markets reuse your R:R and stop buffer in ATR, so nothing depends on their price level.
 
+### Entry styles (pattern mode)
+
+All three use the same zones, the same 15m fill and exit engine, the same fees and your R:R for the target. Sweep and confirm only start watching when price first taps a fresh zone's near edge, then read **closed** `--confirm-tf` candles one at a time. Both enter at market on the next bar after the trigger candle closes.
+
+- **limit** (default): a resting limit at the zone's near edge. This is the blind first-retest entry.
+- **sweep**: in plain words, *wait for price to run the stops sitting just past the zone, then come back*. For a short, price has to trade above the zone's far edge (the high made by the base and the first leg candle, where buy stops sit) by at least `--sweep-min-atr` ATR, and then a `--confirm-tf` candle has to close back below that edge. If price runs more than `--sweep-max-atr` ATR past the edge first, it counts as a breakout and the setup is cancelled. Stop: beyond the sweep's extreme plus the buffer. Longs are the mirror image.
+- **confirm**: in plain words, *wait for the lower timeframe to turn in your direction after the tap*. For a short, after price taps the zone, a bearish `--confirm-tf` candle has to close below the last confirmed `--confirm-tf` swing low (a low with 2 higher lows on each side, which is only known 2 candles later). That is a break of structure. Stop: beyond the highest price since the tap **and** beyond the zone's far edge, plus the buffer. That follows the "stops well beyond the zone" rule.
+- Both styles cancel if a zone-timeframe candle closes through the zone's far edge, or if nothing triggers within `--trigger-window`. With `--skip-strong-atr`, they also skip a zone when a big candle closes hard against the trade on the way in.
+- In the report, "orders" for sweep and confirm means zone taps that were watched. "Unfilled" means no trigger happened.
+
+### Insights (`--insights`)
+
+`insights.py` is rule-based. It reads only the engine's numbers for this run. Every finding states the window, the market or basket, and how many closed trades it rests on. Rules:
+
+| Rule | Fires when | Says |
+|---|---|---|
+| sample | fewer than 20 closed trades | too few to judge; use a basket or a longer window |
+| swept | at least 30% of 3+ stop-outs later reached TP within the window | stops are getting swept; wait for the sweep or put the SL beyond liquidity |
+| fills | fill rate under 40% | entry rarely reached (limit too far, or zone rarely retested, or trigger rarely seen) |
+| far | every-close entry more than 3 x 4h ATR from price | far limit = bet on a retest; test in pattern mode |
+| time | 30% or more of trades end on the time limit (or 40%+ across the basket variant runs) | target too far for the window, or stop very wide |
+| below_be | win rate below break-even with blind limits | try a confirmation entry (shows the confirm rows as evidence) |
+| markets | basket market with -3R or worse | names the losing and winning markets |
+| decay | first half positive and second half at least 0.3R worse | it got weaker over time |
+| edge_stop | SL less than 0.5 x zone ATR beyond the zone's far edge | warns against zone-edge stops (your own rule) |
+| streak / rr | long losing streak; R:R below your 1:2.8 rule | information only. R:R is reported, never enforced |
+
+**What-if comparison.** The setup is re-run, on the same window and in pattern mode, as four variants: blind limit, limit with the SL 0.5 ATR further beyond the zone, sweep entry, and confirm entry. Each runs on the single market and on a basket (`--basket` if given, otherwise all FX pairs for an FX market) to get more trades. A variant is only named as "best" if it has at least 20 closed trades, a win rate above break-even and a positive average R after fees. Even then, the text warns that the best of 8 tries on the same data overstates its edge (multiple comparisons). Otherwise it says the evidence is insufficient. The insights never say a setup will win.
+
+The web app shows this as an **Insights** panel under the result cards: findings, the comparison table, the best-variant line, **Suggested fixes** with the tested numbers behind each fix, and a disclaimer. It is on by default and can be switched off with the "Insights" checkbox.
+
 ### Output
 
 Output includes orders, fills, unfilled orders, TP, SL and time exits; win rate and break-even win rate before and after fees; average R (net and gross), expectancy, and total R; max losing streak and max drawdown in R; a first-half vs second-half average R stability check; and the stop check. `--json` prints this as JSON. `--json-out` also saves every simulated trade.
@@ -168,6 +216,14 @@ Output includes orders, fills, unfilled orders, TP, SL and time exits; win rate 
 - **Truncation.** Cutting off future candles does not change any pattern trade that had already finished.
 - **Hand-built retest.** A base, then a drop, then a rally back to the zone low. The order fills at the zone low with the stop above the zone, and it hits TP for exactly +2R. With the data cut before the drop candle closes, there is no zone and no order.
 
+`python tests/test_entries.py` runs offline checks for the sweep and confirm entries:
+
+- **Truncation.** Cutting off future candles never changes a sweep or confirm trade that had already finished. This runs for both styles, both sides, 30m and 1h zones, and 3 cut points.
+- **Future changes don't move a trigger.** Changing every candle after a trade's trigger leaves that trade's tap, trigger, entry, SL and TP unchanged.
+- **Event order and stops.** zone confirmed <= tap <= trigger <= fill. The SL sits beyond both the zone's far edge and the tap/sweep extreme. A sweep trade needs price beyond the far edge and an entry back inside it. A confirm entry closes through the swing.
+- **Hand-built sweep.** Price taps a supply zone, wicks 0.5 above its far edge, and closes back inside. The short is entered on the first 15m close back under the edge, never before, with the SL above the sweep high, and it hits TP at +2R. With the data cut before that close, there is no trade. A plain retest that never trades past the far edge gives no sweep trade.
+- **Hand-built confirm.** Tap, then a 15m swing low at 98.9, a push up, and a bearish close at 98.7. The short is entered there, with the SL beyond the zone's far edge.
+
 `python tests/sanity.py` runs three checks (the look-ahead and coin-flip checks fetch live MFP candles):
 
 - **Look-ahead.** Deleting future candles must not change any trade that had already finished: 5 markets, both sides, 3 cut points.
@@ -179,7 +235,8 @@ Output includes orders, fills, unfilled orders, TP, SL and time exits; win rate 
 - MFP history is currently about 60 days on Binance-sourced markets. Hyperliquid `xyz:` markets started around 2 Oct 2026, so those windows are shorter. A rolling 3-month window is on the roadmap and is not available yet.
 - Every-close mode tests the setup's shape at every 4h close, not only where a pattern appears. `--trend-filter` is a rough context filter only.
 - Pattern mode's zones are a **rule-based approximation** of the zones a trader draws by eye. It does not see liquidity sweeps, BOS confirmation, equal highs and lows, efficiency or imbalance, or higher-timeframe context. It may miss zones you would take and take zones you would skip. Your own chart zone may not match any detected zone; see "Default stop buffer" above.
-- Pattern mode trades the first retest blind with a resting limit. The course's preferred entry waits for confirmation on a lower timeframe, and that is not modelled yet.
+- The sweep and confirm entries are mechanical rules: the "liquidity" is the zone's far edge, and the swing is a 2-bar fractal on 15m. They do not see equal highs and lows, session highs, or higher-timeframe context, and confirm-tf candles finer than the 15m data (5m) need `--interval 5m`.
+- With about 60 days of data, sweep and confirm on one market give only a handful of trades. The what-if comparison tries 8 variants on the same data, so any "best" one is partly luck. It is evidence to forward-test, not a fix.
 - With about 60 days of data, a single market gives only a handful of fresh zones (about 5 on 4h, about 25 on 30m). Use `--basket` to reach 20+ trades, but pooling assumes the pattern behaves the same across pairs.
 - The zone rule's defaults were chosen before looking at results and were not optimised. Changing them and keeping whichever looks best would be curve-fitting on a tiny sample.
 - One trade at a time gives about 10–30 trades in 60 days. Most single setups will read "too few samples". Treat any result under about 50 trades as a rough check, not proof.
@@ -193,7 +250,7 @@ Past results do not guarantee future profit. CHRONOS does not predict prices, do
 
 ## Example results
 
-`examples/` holds the text reports for the two example setups (AUD/USD short and EUR/USD short) in pattern mode, on one market and on the FX basket, plus every-close runs for comparison. The run time is in `examples/RUN_TIME.txt`. The numbers move as the 60-day window rolls forward.
+`examples/` holds the text reports for the two example setups (AUD/USD short and EUR/USD short) in pattern mode, on one market and on the FX basket, plus every-close runs for comparison. The run time is in `examples/RUN_TIME.txt`. The `*_insights_*` files are the same setups with `--insights` (findings, what-if comparison, suggested fixes), with JSON for the single-market runs; their run time is in `examples/RUN_TIME_INSIGHTS.txt`. `web/screenshot-insights.png` shows the Insights panel. The numbers move as the 60-day window rolls forward.
 
 ## Roadmap
 
@@ -206,7 +263,7 @@ Past results do not guarantee future profit. CHRONOS does not predict prices, do
 - Funding costs.
 - Walk-forward train/test split.
 - Confidence ranges around reported metrics.
-- Pattern mode v2: lower-timeframe confirmation entry, liquidity-sweep and equal-high/low filters, efficiency-based stop choice.
-- A rule-based insights layer: AI may only reword numbers the engine already produced.
+- Pattern mode v2: equal-high/low and session-high liquidity, efficiency-based stop choice, higher-timeframe context.
+- Insights: optional AI rewording, limited to numbers the engine already produced. The rule-based layer is done.
 
 Hosting is intentionally not part of this push.

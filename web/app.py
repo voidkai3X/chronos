@@ -109,7 +109,7 @@ def _num(d, k):
 def run_test():
     d = request.get_json(silent=True)
     if not isinstance(d, dict):
-        return err("send a JSON body: {market, side, entry, tp, sl, days, expiry, trend_filter, mode, zone_tf, sl_buffer_atr}")
+        return err("send a JSON body: {market, side, entry, tp, sl, days, expiry, trend_filter, mode, zone_tf, sl_buffer_atr, entry_style, insights}")
     try:
         market = str(d.get("market") or "").strip()
         if not market:
@@ -139,6 +139,12 @@ def run_test():
         zone_tf = str(d.get("zone_tf") or "4h").lower()
         if zone_tf not in ("30m", "1h", "4h"):
             raise ValueError("zone_tf must be 30m, 1h or 4h")
+        entry_style = str(d.get("entry_style") or "limit").lower()
+        if entry_style not in tester.ENTRY_STYLES:
+            raise ValueError("entry_style must be limit, sweep or confirm")
+        if mode != "pattern" and entry_style != "limit":
+            raise ValueError("entry_style sweep/confirm needs mode 'pattern'")
+        want_insights = bool(d.get("insights", True))
         slb = d.get("sl_buffer_atr")
         if slb not in (None, ""):
             try:
@@ -163,9 +169,11 @@ def run_test():
                        f"--entry={entry!r}", f"--tp={tp!r}", f"--sl={sl!r}", "--days", str(days),
                        "--json", "--json-out", jp, "--mode", mode] + (["--trend-filter"] if trend else [])
                 if mode == "pattern":  # pattern mode: limit rests on a zone until touched/invalidated (engine default)
-                    cmd += ["--zone-tf", zone_tf] + ([f"--sl-buffer-atr={slb!r}"] if slb is not None else [])
+                    cmd += ["--zone-tf", zone_tf, "--entry-style", entry_style] + ([f"--sl-buffer-atr={slb!r}"] if slb is not None else [])
                 else:
                     cmd += ["--expiry", expiry]
+                if want_insights:  # re-runs the setup as limit / wider SL / sweep / confirm (+ FX basket for FX)
+                    cmd += ["--insights"]
                 t0 = time.time()
                 try:
                     p = subprocess.run(cmd, cwd=ENGINE_DIR, capture_output=True, text=True, timeout=RUN_TIMEOUT)

@@ -1,7 +1,7 @@
 # Not deployed. Example container for Hugging Face Spaces (Docker SDK), Render or Fly.
 FROM python:3.12-slim
 WORKDIR /app
-COPY tester.py /app/tester.py
+COPY tester.py insights.py /app/
 COPY web/requirements.txt /app/web/requirements.txt
 RUN pip install --no-cache-dir -r /app/web/requirements.txt
 COPY web/app.py /app/web/app.py

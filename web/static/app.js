@@ -74,6 +74,7 @@ $("mode").addEventListener("click", e => {
   mode = b.dataset.mode;
   [...$("mode").children].forEach(x => x.classList.toggle("on", x === b));
   $("pattern-opts").hidden = mode !== "pattern";
+  $("style-opts").hidden = mode !== "pattern";
   $("expiry").disabled = mode === "pattern";
   $("exp-note").textContent = mode === "pattern" ? "(not used in pattern mode)" : "";
 });
@@ -117,8 +118,8 @@ async function run() {
   if (le === null) return showErr("Enter entry, TP and SL.");
   if (le) return showErr(le);
   const body = { market: mk, side, entry: +$("entry").value, tp: +$("tp").value, sl: +$("sl").value,
-    days: +$("days").value, expiry: $("expiry").value, trend_filter: $("trend").checked, mode };
-  if (mode === "pattern") { body.zone_tf = $("zone-tf").value; if ($("sl-buf").value !== "") body.sl_buffer_atr = +$("sl-buf").value; }
+    days: +$("days").value, expiry: $("expiry").value, trend_filter: $("trend").checked, mode, insights: $("insights").checked };
+  if (mode === "pattern") { body.zone_tf = $("zone-tf").value; body.entry_style = $("entry-style").value; if ($("sl-buf").value !== "") body.sl_buffer_atr = +$("sl-buf").value; }
   setBusy(true);
   try {
     const r = await fetch("/api/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -146,8 +147,10 @@ function render(o) {
   $("r-title").textContent = `${g.side.toUpperCase()} ${m.market_id}  ·  entry ${fmt(g.entry)}  TP ${fmt(g.tp)}  SL ${fmt(g.sl)}  ·  1:${g.rr.toFixed(2)}`;
   const pat = p.mode === "pattern";
   $("r-sub").textContent = `${pat ? "PATTERN mode. " : ""}${o.data.days} days of ${o.data.interval} MFP candles, ${wat(o.data.from_ms)} to ${wat(o.data.to_ms)} WAT. ` +
-    (pat ? `Price at test ${fmt(g.ref)}. Replayed as a limit at the near edge of each fresh ${g.side === "short" ? "supply" : "demand"} zone on ${p.zone_tf} candles, ` +
-      `stop ${p.sl_buffer_atr.toFixed(2)} ATR beyond the far edge (${p.sl_buffer_source.how}), target ${g.rr.toFixed(2)}R. Time stop ${p.max_hold}`
+    (pat ? `Price at test ${fmt(g.ref)}. ` + (p.entry_style && p.entry_style !== "limit"
+      ? `Entry style ${p.entry_style}: ${p.placement}. Stop ${p.sl_buffer_atr.toFixed(2)} ATR beyond the move's extreme and the zone, target ${g.rr.toFixed(2)}R. Time stop ${p.max_hold}`
+      : `Replayed as a limit at the near edge of each fresh ${g.side === "short" ? "supply" : "demand"} zone on ${p.zone_tf} candles, ` +
+      `stop ${p.sl_buffer_atr.toFixed(2)} ATR beyond the far edge (${p.sl_buffer_source.how}), target ${g.rr.toFixed(2)}R. Time stop ${p.max_hold}`)
     : `Price at test ${fmt(g.ref)}, 4h ATR ${fmt(g.atr, 4)}. Replayed as entry ${g.entry_atr >= 0 ? "+" : ""}${g.entry_atr.toFixed(2)} ATR (${g.entry_type}), ` +
       `stop ${g.risk_atr.toFixed(2)} ATR, target ${g.reward_atr.toFixed(2)} ATR. Expiry ${p.expiry}, time stop ${p.max_hold}`) + (p.trend_filter ? ", trend filter on." : ".");
   const [cls, label] = badgeFor(s.verdict);
@@ -173,8 +176,28 @@ function render(o) {
   ].join("");
   $("meta").textContent = `Fees: ${o.fees.commission_pct_per_fill}% per fill + ${o.fees.swap_pct_per_day}%/day swap (${o.fees.asset_class}, MFP standard). ` +
     `Tie rule: ${p.tie_rule}. Placement: ${p.placement}. Generated ${o.generated.replace("T", " ").replace("Z", " UTC")}` + (o.elapsed_s != null ? `, ran in ${o.elapsed_s}s.` : ".");
+  renderInsights(o.insights);
   renderTrades(o.trades || []);
   drawChart(o.trades || []);
+}
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+function renderInsights(ins) {
+  $("ins").hidden = !ins;
+  if (!ins) return;
+  $("ins-list").innerHTML = ins.findings.map(f => `<li class="${f.level === "warn" ? "w" : "i"}">${esc(f.text)}</li>`).join("");
+  $("ins-note").textContent = ins.comparison_note;
+  $("ins-tbl").querySelector("tbody").innerHTML = ins.comparison.map(r => {
+    const ev = r.eligible ? `<span class="tag tp">20+ trades, above BE</span>`
+      : r.closed < ins.min_closed ? `<span class="tag unf">too few (&lt;${ins.min_closed})</span>` : `<span class="tag sl">below BE / no edge</span>`;
+    return `<tr><td>${esc(r.variant)}</td><td>${esc(r.scope)}</td><td class="r">${r.sl_buffer_atr.toFixed(2)} ATR</td><td class="r">${r.closed}</td>` +
+      `<td class="r">${r.tp}/${r.sl}/${r.time_exits}</td><td class="r">${pct(r.win_rate)}</td><td class="r">${pct(r.breakeven_win_rate)}</td>` +
+      `<td class="r ${r.avg_r_net > 0 ? "pos" : r.avg_r_net < 0 ? "neg" : ""}">${sgnR(r.avg_r_net)}</td><td class="r">${sgnR(r.total_r_net)}</td>` +
+      `<td class="r">${r.t_stat == null ? "n/a" : r.t_stat.toFixed(1)}</td><td>${ev}</td></tr>`;
+  }).join("");
+  $("ins-best").textContent = ins.best.text;
+  const fx = ins.fixes.length ? ins.fixes : [{ fix: "No specific fix: nothing in this result tripped a rule.", evidence: [] }];
+  $("ins-fixes").innerHTML = fx.map(f => `<li>${esc(f.fix)}${f.evidence.length ? `<ul>${f.evidence.map(e => `<li class="ev">Tested: ${esc(e)}</li>`).join("")}</ul>` : ""}</li>`).join("");
+  $("ins-disc").textContent = ins.disclaimer;
 }
 function renderTrades(tr) {
   const rows = tr.map((t, i) => {
@@ -241,6 +264,8 @@ function applyQuery() {
   if (q.get("trend") === "1") $("trend").checked = true;
   if (q.get("mode") === "pattern") $("mode").querySelector("[data-mode=pattern]").click();
   if (q.get("zone_tf")) $("zone-tf").value = q.get("zone_tf");
+  if (["limit", "sweep", "confirm"].includes(q.get("entry_style"))) $("entry-style").value = q.get("entry_style");
+  if (q.get("insights") === "0") $("insights").checked = false;
   updateRR();
   if (q.get("run") === "1") run();
 }

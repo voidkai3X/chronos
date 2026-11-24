@@ -32,13 +32,16 @@ Candles are cached in `../candle_cache/` (shared with the CLI). The first run on
   ```json
   {"market": "BTC", "side": "short", "entry": 64780, "tp": 54209, "sl": 66350,
    "days": 60, "expiry": "72h", "trend_filter": false,
-   "mode": "pattern", "zone_tf": "4h", "sl_buffer_atr": null}
+   "mode": "pattern", "zone_tf": "4h", "sl_buffer_atr": null,
+   "entry_style": "limit", "insights": true}
   ```
   - Validation:
     - A long needs `sl < entry < tp`. A short needs `tp < entry < sl`.
     - `days` must be from 30 to 60.
     - `expiry` must be from 1h to 14d. It is only used in every-close mode.
     - `mode` is `every-close` (default) or `pattern`. `zone_tf` (30m, 1h or 4h) and `sl_buffer_atr` (0-10, or omit for auto) apply to pattern mode only.
+    - `entry_style` is `limit` (default), `sweep` or `confirm`, and works in pattern mode only.
+    - `insights` (default true) adds `--insights`. This re-runs the setup as 4 variants on the market and, for FX, on all FX pairs, which takes a few seconds more. The response then has an `insights` object with `findings`, `comparison`, `best`, `fixes` and `disclaimer`.
   - Response: the engine's JSON (`market`, `setup`, `params`, `data`, `fees`, `result` with the verdict, plus `trades` and `elapsed_s`).
   - Errors come back as `{"error": "..."}`:
     - 400 for bad input
@@ -52,9 +55,12 @@ You can also prefill the page from the URL. Adding `run=1` runs the test straigh
 http://localhost:8080/?market=BTC&side=short&entry=64780&tp=54209&sl=66350&days=60&expiry=72h&run=1
 ```
 
+Pattern-mode URLs also accept `mode=pattern`, `zone_tf=30m`, `entry_style=sweep|confirm`, and `insights=0` to turn insights off.
+
 ## Limits (shown on the page)
 
-- It tests the setup's shape at every 4h close, not only where your pattern (sweep, BOS, zone) appears.
+- Every-close mode tests the setup's shape at every 4h close, not only where your pattern appears. Pattern mode with sweep or confirm entries is closer to how the setup is traded, but it is still a mechanical rule.
+- Insights are rule-based and use only the engine's numbers. The "best variant" is the best of 8 tries on the same data, so it overstates the edge.
 - One order or trade runs at a time, so 60 days gives about 10 to 30 trades. Under 20 closed trades reads "too few samples".
 - Backtest on past MFP candles only. Not a prediction, not advice. Past results do not guarantee future profit.
 

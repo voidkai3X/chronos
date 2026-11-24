@@ -123,7 +123,10 @@ def fetch_candles(m, interval, start_ms, end_ms, refresh=False):
         c = e
     if windows:
         have.update(asyncio.run(_fetch_chunks(m["provider"], m["coin"], interval, windows)))
-        pickle.dump(have, open(path, "wb"))
+        tmp = f"{path}.{os.getpid()}.tmp"  # atomic: insights/basket runs may read other markets' caches in parallel
+        with open(tmp, "wb") as fh:
+            pickle.dump(have, fh)
+        os.replace(tmp, path)
     return [have[k] for k in sorted(have) if start_ms <= k < end_ms]
 
 
@@ -539,6 +542,167 @@ def replay_pattern(base, g, zone_tf="4h", expiry_ms=30 * 86400_000, max_touches=
                                               zones_invalidated=sum(1 for z in in_window if z["dead"] < z["known"] + zone_max_age_ms))
 
 
+# ---------------------------------------------------------------- triggered entries (sweep / confirm) on zone taps
+ENTRY_STYLES = ("limit", "sweep", "confirm")
+
+
+def replay_pattern_triggered(base, g, entry_style, zone_tf="4h", confirm_tf="15m", sl_buffer_atr=0.3, max_touches=1,
+                             trigger_window_ms=None, sweep_min_atr=0.1, sweep_max_atr=1.5, skip_strong_atr=None,
+                             swing_n=2, trend_filter=False, sweep_window_ms=None, sweep_atr=1.0, fee_pct=0.0,
+                             swap_pct_day=0.0, start_ms=None, max_hold_ms=None, zone_max_age_ms=30 * 86400_000,
+                             zone_params=None):
+    """Pattern mode with a trigger instead of a blind limit. Same zones, same 15m fill/exit engine, same fees.
+
+    Watch starts when price first taps a fresh zone's near edge (the tap is a base-bar time, known when it happens).
+    From then on only confirm-tf candles that have CLOSED are read, one at a time, until a trigger, a cancel, or
+    trigger_window_ms after the tap:
+      sweep   (short): price trades above the zone's far edge (the swing high the base + leg made, where buy stops
+              sit) by >= sweep_min_atr x zone-tf ATR, then a confirm-tf candle closes back below that edge.
+              Cancelled if it runs more than sweep_max_atr ATR past the edge (that is a breakout, not a sweep).
+      confirm (short): after the tap, a bearish confirm-tf candle closes below the last confirmed confirm-tf swing low
+              (a low with swing_n higher lows on each side; confirmed swing_n candles later) = break of structure.
+      Long is the mirror image. Entry: market at the open of the first base bar after the trigger candle closes.
+      SL: beyond the most extreme price since the tap AND beyond the zone's far edge, plus sl_buffer_atr x ATR.
+      TP: entry +- rr x risk (the user's R:R). Cancelled if a zone-tf candle closes through the far edge (zone dead),
+      and, with skip_strong_atr, if a zone-tf candle with a body >= skip_strong_atr ATR closes hard against the trade
+      between zone confirmation and the trigger. One setup at a time, taps handled in time order."""
+    if entry_style not in ("sweep", "confirm"):
+        raise ValueError(entry_style)
+    sgn, rr = g["sgn"], g["rr"]
+    zstep, cstep = STEP[zone_tf], STEP[confirm_tf]
+    bstep = min(b2[0] - b1[0] for b1, b2 in zip(base[:50], base[1:51]))
+    if zstep < bstep:
+        raise SystemExit(f"--zone-tf {zone_tf} is finer than the candle interval")
+    if cstep < bstep or cstep > zstep:
+        raise SystemExit(f"--confirm-tf {confirm_tf} must be between the candle interval and --zone-tf {zone_tf}")
+    zb = complete_bars(resample(base, zstep), zstep, bstep)
+    zatr = atr_series(zb)
+    zb_close_t = [b[0] + zstep for b in zb]
+    cb = complete_bars(resample(base, cstep), cstep, bstep)
+    cb_close_t = [b[0] + cstep for b in cb]
+    h4c = complete_bars(resample(base, H4), H4, bstep)
+    ema = ema_series([b[4] for b in h4c])
+    h4_close_t = [b[0] + H4 for b in h4c]
+    bt = [b[0] for b in base]
+    zones = detect_zones(zb, zatr, g["side"], zstep, **(zone_params or {}))
+    zb_close = [(b[0] + zstep, b[4]) for b in zb]
+    for z in zones:
+        zone_lifecycle(z, base, bt, zb_close, zstep, zone_max_age_ms, max_touches)
+    trigger_window_ms = trigger_window_ms or 12 * zstep
+    sweep_window_ms = sweep_window_ms or 7 * 86400_000
+    cands = sorted((tt, n) for n, z in enumerate(zones) for tt in z["touches"][:max_touches]
+                   if tt < z["dead"] and (not start_ms or tt >= start_ms))
+    trades, busy_until, skipped_trend, traded = [], 0, 0, set()
+
+    def against(b):  # body size against the trade (bullish body for a short)
+        return max(0.0, (b[1] - b[4]) * sgn)
+
+    for tt, n in cands:
+        if tt < busy_until or n in traded:
+            continue
+        z = zones[n]
+        h = bisect.bisect_right(zb_close_t, tt) - 1  # last zone-tf bar closed at or before the tap
+        if h < 0 or zatr[h] is None:
+            continue
+        a = zatr[h]
+        info = dict(ref=None, zone=n, zone_known=z["known"], zone_proximal=z["proximal"], zone_distal=z["distal"],
+                    atr=a, placed=tt, tap=tt, entry_style=entry_style, entry=None, sl=None, tp=None, status="unfilled")
+        if trend_filter:
+            k4 = bisect.bisect_right(h4_close_t, tt) - 1
+            if not (k4 >= 5 and ema[k4] is not None and ema[k4 - 5] is not None and (ema[k4] - ema[k4 - 5]) * sgn > 0):
+                skipped_trend += 1
+                continue
+        # strong candle against the order between zone confirmation and the tap (closed zone-tf bars only)
+        if skip_strong_atr:
+            k0, k1 = bisect.bisect_right(zb_close_t, z["known"]), bisect.bisect_right(zb_close_t, tt)
+            if any(against(zb[k]) >= skip_strong_atr * a for k in range(k0, k1)):
+                trades.append(dict(info, reason="strong candle against the trade on the way into the zone"))
+                continue
+        level = z["distal"]
+        ext = None  # most extreme price against the trade since the tap
+        swing = None  # last confirmed confirm-tf swing (low for a short, high for a long): (index, price)
+        ci = bisect.bisect_right(cb_close_t, tt)  # first confirm-tf candle still open at the tap
+        if entry_style == "confirm":  # swings confirmed before the tap candle closes (lookback 4 x swing_n x 5)
+            for k in range(max(swing_n, ci - 20 * swing_n), ci):
+                p = k - swing_n
+                if p - swing_n < 0:
+                    continue
+                v = cb[p][3] if sgn == -1 else cb[p][2]
+                nb = [cb[q][3] if sgn == -1 else cb[q][2] for q in range(p - swing_n, p + swing_n + 1) if q != p]
+                if all((v < x) if sgn == -1 else (v > x) for x in nb):
+                    swing = (p, v)
+        trig = reason = None
+        zk = bisect.bisect_right(zb_close_t, tt)  # next zone-tf close to check for a strong candle
+        k = ci
+        while k < len(cb) and cb_close_t[k] <= tt + trigger_window_ms:
+            tclose = cb_close_t[k]
+            if tclose >= z["dead"]:
+                reason = "zone closed through its far edge before a trigger"
+                break
+            if skip_strong_atr:
+                while zk < len(zb) and zb_close_t[zk] <= tclose:
+                    if against(zb[zk]) >= skip_strong_atr * a:
+                        reason = "strong candle closed against the trade before a trigger"
+                    zk += 1
+                if reason:
+                    break
+            _, o, hi, lo, c = cb[k][:5]
+            ext = (hi if ext is None else max(ext, hi)) if sgn == -1 else (lo if ext is None else min(ext, lo))
+            if entry_style == "sweep":
+                beyond = (ext - level) * -sgn
+                if beyond > sweep_max_atr * a:
+                    reason = f"ran more than {sweep_max_atr:g} ATR past the far edge (breakout, not a sweep)"
+                    break
+                if beyond >= sweep_min_atr * a and (c - level) * sgn > 0:  # closed back inside (below the edge for a short)
+                    trig = (k, c)
+                    break
+            else:
+                p = k - swing_n  # does this close confirm a new swing?
+                if p - swing_n >= 0:
+                    v = cb[p][3] if sgn == -1 else cb[p][2]
+                    nb = [cb[q][3] if sgn == -1 else cb[q][2] for q in range(p - swing_n, p + swing_n + 1) if q != p]
+                    if all((v < x) if sgn == -1 else (v > x) for x in nb):
+                        swing = (p, v)
+                if swing and swing[0] < k and (c - swing[1]) * sgn > 0 and (c - o) * sgn > 0:
+                    trig = (k, c)
+                    break
+            k += 1
+        if trig is None:
+            if reason is None and k >= len(cb):
+                trades.append(dict(info, status="pending_at_end", reason="data ended while waiting for a trigger"))
+                break
+            trades.append(dict(info, reason=reason or "no trigger within the trigger window"))
+            continue
+        k, entry = trig
+        te = cb_close_t[k]
+        far = max(ext, level) if sgn == -1 else min(ext, level)
+        sl = far - sgn * sl_buffer_atr * a
+        risk = (entry - sl) * sgn
+        if risk <= 0:
+            trades.append(dict(info, reason="no room between trigger close and stop"))
+            continue
+        tp = entry + sgn * rr * risk
+        j = bisect.bisect_left(bt, te)
+        if j >= len(base):
+            trades.append(dict(info, status="pending_at_end", trigger=te, reason="data ended at the trigger"))
+            break
+        tr, nxt = simulate_order(base, j, te, entry, sl, tp, sgn, "market", bstep, a, risk=risk, fee_pct=fee_pct,
+                                 swap_pct_day=swap_pct_day, max_hold_ms=max_hold_ms, sweep_window_ms=sweep_window_ms,
+                                 sweep_atr=sweep_atr, tr=dict(info, trigger=te, tap_extreme=ext,
+                                                              swing_level=swing[1] if swing and entry_style == "confirm" else None))
+        tr["placed"] = tt
+        trades.append(tr)
+        traded.add(n)
+        if nxt is None:
+            break
+        busy_until = nxt
+    in_window = [z for z in zones if not start_ms or z["known"] >= start_ms]
+    return trades, skipped_trend, zones, dict(zones_found=len(in_window), zones_found_incl_warmup=len(zones),
+                                              zones_traded=len(traded),
+                                              zones_touched=sum(1 for z in in_window if z["touches"]),
+                                              zones_invalidated=sum(1 for z in in_window if z["dead"] < z["known"] + zone_max_age_ms))
+
+
 def summarize(trades, g, min_samples=20):
     closed = [t for t in trades if t["status"] in ("tp", "sl", "time")]
     fills = [t for t in trades if "filled" in t]
@@ -624,6 +788,31 @@ def result_lines(s, p):
     return L
 
 
+def replayed_as(g, p, hold=""):
+    kind = "supply" if g["side"] == "short" else "demand"
+    tail = (f"; zone usable until touched {p['max_touches']}x, closed through, or {p['zone_max_age']} old"
+            + (", only when 4h EMA50 slope agrees" if p["trend_filter"] else "") + ".")
+    style = p.get("entry_style", "limit")
+    if style == "limit":
+        return (f"Replayed as: a limit at the near edge of each fresh {kind} zone on "
+                f"{p['zone_tf']} candles, SL {p['sl_buffer_atr']:.2f} x {p['zone_tf']} ATR beyond the far edge "
+                f"({p['sl_buffer_source']['how']}), TP {g['rr']:.2f}R. Checked at every {p['zone_tf']} close when flat, "
+                f"expiry {p['expiry']}{hold}" + tail)
+    far, dirn = ("high", "above") if g["side"] == "short" else ("low", "below")
+    if style == "sweep":
+        how = (f"after price taps a fresh {kind} zone on {p['zone_tf']} candles, wait for it to trade {dirn} the zone's far "
+               f"edge by at least {p['sweep_min_atr']:g} ATR (a stop-run) and then for a {p['confirm_tf']} candle to close back "
+               f"inside; cancel if it runs more than {p['sweep_max_atr']:g} ATR past the edge")
+    else:
+        sw = "swing low" if g["side"] == "short" else "swing high"
+        how = (f"after price taps a fresh {kind} zone on {p['zone_tf']} candles, wait for a {p['confirm_tf']} candle body to "
+               f"close through the last {p['confirm_tf']} {sw} (break of structure)")
+    return (f"Replayed as: {how}; enter at market on the next bar. SL {p['sl_buffer_atr']:.2f} x {p['zone_tf']} ATR beyond "
+            f"the move's extreme {far} (and beyond the zone), TP {g['rr']:.2f}R. Give up {p['trigger_window']} after the tap"
+            + (f"; skip if a {p['zone_tf']} candle body >= {p['skip_strong_atr']:g} ATR closes against the trade"
+               if p.get("skip_strong_atr") else "") + f"{hold}" + tail)
+
+
 def text_report(out):
     g, s, m, p = out["setup"], out["result"], out["market"], out["params"]
     hold = f", time stop {p['max_hold']}" if str(p['max_hold']).lower() != "none" else ""
@@ -631,15 +820,11 @@ def text_report(out):
             f"{fmt_ts(out['data']['from_ms'])} to {fmt_ts(out['data']['to_ms'])})")
     if p.get("mode") == "pattern":
         z = out["zones"]
-        L = [f"Setup test (PATTERN mode): {g['side'].upper()} {m['market_id']}  {head}",
+        L = [f"Setup test (PATTERN mode, {p.get('entry_style', 'limit')} entry): {g['side'].upper()} {m['market_id']}  {head}",
              f"Your setup: entry {g['entry']:g}, TP {g['tp']:g}, SL {g['sl']:g}, R:R 1:{g['rr']:.2f}. Price now {g['ref']:g}.",
-             f"Replayed as: a limit at the near edge of each fresh {'supply' if g['side'] == 'short' else 'demand'} zone on "
-             f"{p['zone_tf']} candles, SL {p['sl_buffer_atr']:.2f} x {p['zone_tf']} ATR beyond the far edge "
-             f"({p['sl_buffer_source']['how']}), TP {g['rr']:.2f}R. Checked at every {p['zone_tf']} close when flat, "
-             f"expiry {p['expiry']}{hold}; zone usable until touched {p['max_touches']}x, closed through, or {p['zone_max_age']} old"
-             + (", only when 4h EMA50 slope agrees" if p['trend_filter'] else "") + ".",
+             replayed_as(g, p, hold),
              f"Zones found in window: {z['zones_found']} (touched {z['zones_touched']}, invalidated {z['zones_invalidated']}); "
-             f"zones traded (limit filled): {z['zones_traded']}.", ""]
+             f"zones traded (filled): {z['zones_traded']}.", ""]
     else:
         L = [f"Setup test: {g['side'].upper()} {m['market_id']}  {head}",
              f"Setup: entry {g['entry']:g} ({g['entry_type']}), TP {g['tp']:g}, SL {g['sl']:g}, R:R 1:{g['rr']:.2f}. "
@@ -661,7 +846,7 @@ def text_report(out):
 
 def basket_report(out):
     p, s = out["params"], out["result"]
-    L = [f"BASKET test ({p['mode']} mode), {out['setup']['side'].upper()}, {len(out['per_market'])} markets, levels taken from "
+    L = [f"BASKET test ({p['mode']} mode" + (f", {p.get('entry_style', 'limit')} entry" if p['mode'] == 'pattern' else "") + f"), {out['setup']['side'].upper()}, {len(out['per_market'])} markets, levels taken from "
          f"{out['market']['market_id']}" + (f", zones on {p['zone_tf']}, SL {p['sl_buffer_atr']:.2f} ATR past the zone, TP {out['setup']['rr']:.2f}R"
                                            if p['mode'] == 'pattern' else "") + ".", ""]
     for r in out["per_market"]:
@@ -722,9 +907,17 @@ def run_market(m, a, g_user, mode, end_ms, start_ms, warm, expiry, sl_buffer, sl
                   max_hold_ms=None if str(a.max_hold).lower() == "none" else parse_dur(a.max_hold))
     zstats = zlist = None
     if mode == "pattern":
-        trades, skipped, zones, zstats = replay_pattern(
-            base, g, zone_tf=a.zone_tf, expiry_ms=expiry, max_touches=a.max_touches, sl_buffer_atr=sl_buffer,
-            trend_filter=a.trend_filter, zone_max_age_ms=parse_dur(a.zone_max_age), zone_params=zone_params, **common)
+        style = getattr(a, "entry_style", "limit") or "limit"
+        if style == "limit":
+            trades, skipped, zones, zstats = replay_pattern(
+                base, g, zone_tf=a.zone_tf, expiry_ms=expiry, max_touches=a.max_touches, sl_buffer_atr=sl_buffer,
+                trend_filter=a.trend_filter, zone_max_age_ms=parse_dur(a.zone_max_age), zone_params=zone_params, **common)
+        else:
+            trades, skipped, zones, zstats = replay_pattern_triggered(
+                base, g, style, zone_tf=a.zone_tf, confirm_tf=a.confirm_tf, sl_buffer_atr=sl_buffer,
+                max_touches=a.max_touches, trigger_window_ms=parse_dur(a.trigger_window) if a.trigger_window else None,
+                sweep_min_atr=a.sweep_min_atr, sweep_max_atr=a.sweep_max_atr, skip_strong_atr=a.skip_strong_atr,
+                trend_filter=a.trend_filter, zone_max_age_ms=parse_dur(a.zone_max_age), zone_params=zone_params, **common)
         zlist = [dict(known=z["known"], base_from=z["base_from"], proximal=z["proximal"], distal=z["distal"],
                       height_atr=z["height_atr"], impulse_atr=z["impulse_atr"],
                       first_touch=z["touches"][0] if z["touches"] else None,
@@ -775,6 +968,18 @@ def main(argv=None):
     ap.add_argument("--impulse-atr", type=float, default=ZONE_DEFAULTS["impulse_atr"], help="pattern: min move away from the base, in ATR")
     ap.add_argument("--max-base", type=int, default=ZONE_DEFAULTS["max_base"], help="pattern: max base candles (1-6)")
     ap.add_argument("--base-body-atr", type=float, default=ZONE_DEFAULTS["base_body_atr"], help="pattern: max base candle body, in ATR")
+    ap.add_argument("--entry-style", choices=list(ENTRY_STYLES), default="limit",
+                    help="pattern: limit (blind limit at the zone edge, default), sweep (wait for a stop-run past the "
+                         "zone's far edge and a close back inside), confirm (wait for a lower-timeframe break of structure)")
+    ap.add_argument("--confirm-tf", default="15m", choices=["5m", "15m", "30m", "1h"],
+                    help="sweep/confirm: timeframe whose closes are read for the trigger (>= --interval, <= --zone-tf)")
+    ap.add_argument("--trigger-window", default=None, help="sweep/confirm: give up this long after the tap (default 12 zone-tf bars)")
+    ap.add_argument("--sweep-min-atr", type=float, default=0.1, help="sweep: min poke past the far edge, zone-tf ATR")
+    ap.add_argument("--sweep-max-atr", type=float, default=1.5, help="sweep: more than this past the far edge = breakout, cancel")
+    ap.add_argument("--skip-strong-atr", type=float, default=None,
+                    help="sweep/confirm: cancel if a zone-tf candle closes against the trade with a body >= this many ATR")
+    ap.add_argument("--insights", action="store_true",
+                    help="explain the result in plain words and re-run limit / wider SL / sweep / confirm variants to compare")
     ap.add_argument("--basket", "--symbols", dest="basket", default=None,
                     help="also run on these markets and pool them: 'fx' (all MFP FX) and/or a comma list, e.g. fx or EURUSD,GBPUSD")
     ap.add_argument("--ref", type=float, help="override current price")
@@ -808,23 +1013,53 @@ def main(argv=None):
     g["market_id"] = m["market_id"]
 
     zone_params = dict(ZONE_DEFAULTS, impulse_atr=a.impulse_atr, max_base=max(1, min(6, a.max_base)), base_body_atr=a.base_body_atr)
+    if mode != "pattern" and a.entry_style != "limit":
+        raise SystemExit("--entry-style sweep/confirm needs --mode pattern (they trigger on zone taps)")
+    ctx = dict(markets=markets, m=m, g=g, base=base, e=e, sl_user=s_, end_ms=end_ms, start_ms=start_ms, warm=warm,
+               zone_params=zone_params)
     sl_buffer, sl_src = None, None
     if mode == "pattern":
-        zstep = STEP[a.zone_tf]
-        zb = complete_bars(resample(base, zstep), zstep, step)
-        zatr = atr_series(zb)
-        if a.sl_buffer_atr is not None:
-            sl_buffer, sl_src = a.sl_buffer_atr, dict(how="set with --sl-buffer-atr")
-        else:
-            sl_buffer, sl_src = derive_sl_buffer(detect_zones(zb, zatr, a.side, zstep, **zone_params), a.side, e, s_, zatr[-1])
-            sl_src["how"] = f"derived from your SL: {sl_src['how']}"
-        g["zone_tf_atr_now"] = zatr[-1]
+        sl_buffer, sl_src, zatr_now = pattern_sl_buffer(a, ctx)
+        g["zone_tf_atr_now"] = zatr_now
+    out, trades = run_setup(a, mode, ctx, sl_buffer, sl_src, a.basket)
+    if a.insights:
+        import insights
+        out["insights"] = insights.build(a, mode, ctx, out, trades, sl_buffer, sl_src)
+        txt = (text_report(out) if "per_market" not in out else basket_report(out)) + "\n\n" + insights.text(out["insights"])
+    else:
+        txt = text_report(out) if "per_market" not in out else basket_report(out)
+    if a.json_out:
+        json.dump(dict(out, trades=trades), open(a.json_out, "w"), indent=1)
+    print(json.dumps(out, indent=1) if a.json else txt)
+    return out
 
-    targets = [m] + [x for x in parse_basket(a.basket, markets) if x["market_id"] != m["market_id"]]
+
+def pattern_sl_buffer(a, ctx):
+    """SL distance beyond the zone's far edge (zone-tf ATR): --sl-buffer-atr, or derived from the user's own SL."""
+    step = STEP[a.interval]
+    zstep = STEP[a.zone_tf]
+    zb = complete_bars(resample(ctx["base"], zstep), zstep, step)
+    zatr = atr_series(zb)
+    if a.sl_buffer_atr is not None:
+        return a.sl_buffer_atr, dict(how="set with --sl-buffer-atr"), zatr[-1]
+    buf, src = derive_sl_buffer(detect_zones(zb, zatr, a.side, zstep, **ctx["zone_params"]), a.side, ctx["e"],
+                                ctx["sl_user"], zatr[-1])
+    src["how"] = f"derived from your SL: {src['how']}"
+    return buf, src, zatr[-1]
+
+
+def run_setup(a, mode, ctx, sl_buffer, sl_src, basket):
+    """Run the setup on its market (+ basket) with the options in a. Returns (out, trades)."""
+    m, g, markets = ctx["m"], ctx["g"], ctx["markets"]
+    expiry_s = a.expiry or ("30d" if mode == "pattern" else "72h")
+    expiry = parse_dur(expiry_s)
+    style = a.entry_style if mode == "pattern" else "limit"
+    targets = [m] + [x for x in parse_basket(basket, markets) if x["market_id"] != m["market_id"]]
     runs = []
     for mk in targets:
         try:
-            runs.append(run_market(mk, a, g, mode, end_ms, start_ms, warm, expiry, sl_buffer, sl_src, zone_params))
+            runs.append(run_market(mk, a, g, mode, ctx["end_ms"], ctx["start_ms"], ctx["warm"], expiry, sl_buffer,
+                                   sl_src, ctx["zone_params"]))
         except SystemExit as ex:
             if mk is m:
                 raise
@@ -834,10 +1069,16 @@ def main(argv=None):
                   max_hold=a.max_hold, trend_filter=a.trend_filter,
                   tie_rule="TP and SL in same bar = SL; TP not counted on the fill bar; gaps through SL fill at open")
     if mode == "pattern":
-        params.update(placement=f"at each {a.zone_tf} close when flat, limit at the near edge of the nearest fresh zone "
-                                f"(one order/trade at a time)",
-                      zone_tf=a.zone_tf, sl_buffer_atr=round(sl_buffer, 4), sl_buffer_source=sl_src, max_touches=a.max_touches,
-                      zone_max_age=a.zone_max_age, zone_rules=zone_params)
+        params.update(placement=(f"at each {a.zone_tf} close when flat, limit at the near edge of the nearest fresh zone "
+                                 f"(one order/trade at a time)") if style == "limit" else
+                      (f"watch starts when price taps a fresh zone; enter at market after a {a.confirm_tf} "
+                       + ("sweep of the zone's far edge and a close back inside" if style == "sweep"
+                          else "body close through the last swing (break of structure)") + " (one trade at a time)"),
+                      entry_style=style, zone_tf=a.zone_tf, sl_buffer_atr=round(sl_buffer, 4), sl_buffer_source=sl_src,
+                      max_touches=a.max_touches, zone_max_age=a.zone_max_age, zone_rules=ctx["zone_params"])
+        if style != "limit":
+            params.update(confirm_tf=a.confirm_tf, trigger_window=a.trigger_window or f"12 x {a.zone_tf}",
+                          sweep_min_atr=a.sweep_min_atr, sweep_max_atr=a.sweep_max_atr, skip_strong_atr=a.skip_strong_atr)
     else:
         params.update(placement="every 4h close when flat (one order/trade at a time)")
     head = dict(tool="mfp-setup-tester", generated=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), params=params)
@@ -845,7 +1086,6 @@ def main(argv=None):
         out, trades = runs[0]
         out = dict(head, **out)
         out["setup"]["side"] = a.side
-        txt = text_report(out)
     else:
         trades = sorted((t for _, tr in runs for t in tr), key=lambda t: t.get("exit") or t["placed"])
         pooled = summarize(trades, g)
@@ -853,12 +1093,7 @@ def main(argv=None):
                    basket=[r[0]["market"]["market_id"] for r in runs], per_market=[r[0] for r in runs], result=pooled)
         if mode == "pattern":
             out["zones"] = {k: sum(r[0]["zones"][k] for r in runs) for k in ("zones_found", "zones_traded", "zones_touched", "zones_invalidated")}
-        txt = basket_report(out)
-    if a.json_out:
-        json.dump(dict(out, trades=trades), open(a.json_out, "w"), indent=1)
-    print(json.dumps(out, indent=1) if a.json else txt)
-    return out
-
+    return out, trades
 
 if __name__ == "__main__":
     main()

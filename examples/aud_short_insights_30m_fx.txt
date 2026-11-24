@@ -1,0 +1,48 @@
+BASKET test (pattern mode, limit entry), SHORT, 6 markets, levels taken from veranta|AUDUSD, zones on 30m, SL 1.92 ATR past the zone, TP 3.66R.
+
+  veranta|AUDUSD     zones  24, orders  26, fills  14, TP  3, SL 10, time  0, win  23%, avg +0.03R, total +0.4R
+  veranta|EURUSD     zones  24, orders  25, fills  14, TP  4, SL  7, time  2, win  31%, avg +0.69R, total +8.9R
+  veranta|USDJPY     zones  24, orders  19, fills  14, TP  3, SL 10, time  1, win  21%, avg +0.01R, total +0.1R
+  veranta|GBPUSD     zones  22, orders  25, fills  13, TP  1, SL 11, time  1, win   8%, avg -0.46R, total -6.0R
+  veranta|USDCAD     zones  34, orders  26, fills  17, TP  1, SL 14, time  1, win   6%, avg -0.69R, total -11.0R
+  veranta|USDCHF     zones  31, orders  27, fills  14, TP  2, SL 11, time  1, win  14%, avg -0.30R, total -4.1R
+
+POOLED (all markets, trades in exit-time order):
+Zones found in window: 159, traded (filled) 86.
+Orders 148: filled 86, unfilled 59, still open at end 6.
+Closed 83: TP 14, SL 63, time exits 6.
+Win rate 17% vs break-even 23% (after fees; 22% before).
+Average R -0.14 net (-0.07 gross). Total -11.6R. Per order placed -0.08R.
+Worst losing streak 9. Worst drawdown -21.8R. First half 0.014R, second half -0.29R avg.
+Stop check: 17 of 63 stop-outs (27%) still reached TP within 7d of the fill; 5 of them (8%) only poked 1.0 ATR or less past the stop first.
+
+Verdict (pooled): no edge (expectancy <= 0 after fees).
+Backtest on past candles only. Not a prediction, not advice.
+
+INSIGHTS (rule-based, from this test's own numbers)
+  ! Win rate 17% is below the 23% needed to break even at 1:3.66 after fees. These are blind limit entries at the first retest. [past 60d, 6-market basket, 83 closed trades]
+  - Losses were concentrated in USDCAD (-11.0R, 16 trades), GBPUSD (-6.0R, 13 trades), USDCHF (-4.1R, 14 trades); the best were EURUSD (+8.9R, 13 trades). [past 60d, per market; small per-market samples]
+  ! It got weaker over time: +0.01R per trade in the first half vs -0.29R in the second. Conditions may have changed. [past 60d, 6-market basket, 83 closed trades]
+  - Worst losing streak was 9 in a row (worst drawdown -21.8R). At 1:3.7 long streaks are normal; size so you can survive them. [past 60d, 6-market basket, 83 closed trades]
+  - R:R tested: 1:3.66. Every variant below keeps this R:R; only the entry and stop change.
+
+WHAT-IF COMPARISON: 8 variant runs on the same 60-day window (pattern mode, 30m zones, same R:R 1:3.66, fees included). Picking the best of several variants overstates its edge (multiple comparisons).
+  variant                      scope            SLbuf closed  TP  SL time  win   BE   avgR   totR     t  evidence
+  limit (blind, first retest)  AUDUSD            1.92     13   3  10    0  23%  22%  +0.03   +0.4   0.1  too few (<20)
+  limit, SL +0.5 ATR wider     AUDUSD            2.42     12   4   7    1  33%  22%  +0.57   +6.9   0.9  too few (<20)
+  sweep entry                  AUDUSD            1.92      5   0   5    0   0%  22%  -1.04   -5.2   n/a  too few (<20)
+  confirm entry                AUDUSD            1.92      6   2   3    1  33%  22%  +0.96   +5.8   n/a  too few (<20)
+  limit (blind, first retest)  6-market basket   1.92     83  14  63    6  17%  23%  -0.14  -11.6  -0.7  below BE / no edge
+  limit, SL +0.5 ATR wider     6-market basket   2.42     75  13  54    8  17%  23%  -0.08   -5.7  -0.4  below BE / no edge
+  sweep entry                  6-market basket   1.92     27   4  23    0  15%  23%  -0.38  -10.2  -1.2  below BE / no edge
+  confirm entry                6-market basket   1.92     38   6  27    5  16%  23%  -0.10   -3.7  -0.3  below BE / no edge
+
+Evidence is insufficient: none of the 8 variant runs had at least 20 closed trades and a result above break-even on this window. Don't read the comparison as a fix; it only shows how each entry style behaved here.
+
+SUGGESTED FIXES
+  * Don't enter blind at the limit: wait for lower-timeframe confirmation (a body close through the last swing in your direction) after price taps the zone.
+      tested: confirm entry on AUDUSD: 6 closed, win 33% vs break-even 22%, +0.96R per trade (not enough evidence) [past 60d, AUDUSD, 6 closed trades]
+      tested: confirm entry on 6-market basket: 38 closed, win 16% vs break-even 23%, -0.10R per trade (below break-even or no edge) [past 60d, 6-market basket, 38 closed trades]
+  * Check whether the losing markets were trending against your side; don't assume the pattern behaves the same on every pair.
+
+These notes come from past candles in the tested window only. They describe what happened, not what will happen. Small samples and trying several variants both make results look better than they are. Not financial advice.
