@@ -26,17 +26,17 @@ function renderAc() {
   list.innerHTML = items.map((m, i) => `<li data-id="${m.market_id}" class="${i === acIdx ? "act" : ""}">
     <span>${m.symbol}</span><span class="p">${m.provider} · ${m.asset_class}</span></li>`).join("") ||
     `<li class="p">No MFP market matches</li>`;
-  list.hidden = false;
+  list.hidden = false; $("market").setAttribute("aria-expanded", "true");
 }
 function pick(id) {
   chosen = markets.find(m => m.market_id === id) || null;
   if (!chosen) return;
   $("market").value = chosen.symbol;
   $("mkt-id").textContent = chosen.market_id;
-  $("ac-list").hidden = true; acIdx = -1;
+  $("ac-list").hidden = true; $("market").setAttribute("aria-expanded", "false"); acIdx = -1;
   loadPrice();
 }
-$("market").addEventListener("input", () => { chosen = null; $("mkt-id").textContent = ""; $("price").textContent = ""; acIdx = -1; renderAc(); });
+$("market").addEventListener("input", () => { chosen = null; $("mkt-id").textContent = ""; setPrice("", ""); acIdx = -1; renderAc(); });
 $("market").addEventListener("focus", renderAc);
 $("market").addEventListener("keydown", e => {
   const lis = [...$("ac-list").querySelectorAll("li[data-id]")];
@@ -49,17 +49,18 @@ $("ac-list").addEventListener("mousedown", e => { const li = e.target.closest("l
 document.addEventListener("click", e => { if (!e.target.closest(".ac")) $("ac-list").hidden = true; });
 
 let refPrice = null;
+function setPrice(txt, cls) { const el = $("price"); el.textContent = txt; el.className = "price" + (cls ? " " + cls : ""); }
 function loadPrice() {
   if (!chosen) return;
   const id = chosen.market_id;
-  $("price").textContent = "loading price...";
+  setPrice("loading price...", "loading");
   fetch("/api/price?market=" + encodeURIComponent(id)).then(r => r.json()).then(j => {
     if (!chosen || chosen.market_id !== id) return;
-    if (j.error) { $("price").textContent = "price unavailable"; refPrice = null; return; }
+    if (j.error) { setPrice("price unavailable", "bad"); refPrice = null; return; }
     refPrice = j.price;
-    $("price").textContent = "Price " + fmt(j.price) + " (last 15m close)";
+    setPrice(fmt(j.price) + " · last 15m close", "");
     updateRR();
-  }).catch(() => { $("price").textContent = "price unavailable"; });
+  }).catch(() => { setPrice("price unavailable", "bad"); });
 }
 
 // ---------- side + live R:R
@@ -76,7 +77,7 @@ $("mode").addEventListener("click", e => {
   $("pattern-opts").hidden = mode !== "pattern";
   $("style-opts").hidden = mode !== "pattern";
   $("expiry").disabled = mode === "pattern";
-  $("exp-note").textContent = mode === "pattern" ? "(not used in pattern mode)" : "";
+  $("exp-note").textContent = mode === "pattern" ? "· not used in pattern mode" : "";
 });
 function levelError() {
   const e = parseFloat($("entry").value), t = parseFloat($("tp").value), s = parseFloat($("sl").value);
@@ -105,9 +106,20 @@ $("days").addEventListener("input", () => $("days-v").textContent = $("days").va
 
 // ---------- run
 $("f").addEventListener("submit", e => { e.preventDefault(); run(); });
+let hadResult = false;
 function setBusy(b) {
   $("run").disabled = b; $("run").querySelector(".spin").hidden = !b;
   $("run").querySelector(".txt").textContent = b ? "Running backtest..." : "Run test";
+  $("skel").hidden = !b;
+  if (b) { $("empty").hidden = true; $("res").hidden = true; }
+  else if (!hadResult) $("empty").hidden = false; else $("res").hidden = false;
+  if (b && window.matchMedia("(max-width: 980px)").matches) $("results").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+function toast(msg) {
+  const t = document.createElement("div"); t.className = "toast"; t.setAttribute("role", "alert");
+  t.innerHTML = `<span><b>Test failed.</b> ${esc(msg)}</span><button type="button" aria-label="Dismiss">×</button>`;
+  t.querySelector("button").onclick = () => t.remove();
+  $("toasts").appendChild(t); setTimeout(() => t.remove(), 9000);
 }
 function showErr(msg) { $("form-err").hidden = !msg; $("form-err").textContent = msg || ""; }
 async function run() {
@@ -126,7 +138,7 @@ async function run() {
     const j = await r.json().catch(() => ({ error: "Server returned an invalid response (" + r.status + ")" }));
     if (!r.ok || j.error) throw new Error(j.error || ("HTTP " + r.status));
     render(j);
-  } catch (err) { showErr(err.message); }
+  } catch (err) { showErr(err.message); toast(err.message); }
   finally { setBusy(false); }
 }
 
@@ -143,7 +155,7 @@ function card(k, v, d, cls) { return `<div class="card"><div class="k">${k}</div
 function render(o) {
   lastResult = o;
   const g = o.setup, s = o.result, m = o.market, p = o.params;
-  $("empty").hidden = true; $("res").hidden = false;
+  hadResult = true; $("empty").hidden = true; $("skel").hidden = true; $("res").hidden = false;
   $("r-title").textContent = `${g.side.toUpperCase()} ${m.market_id}  ·  entry ${fmt(g.entry)}  TP ${fmt(g.tp)}  SL ${fmt(g.sl)}  ·  1:${g.rr.toFixed(2)}`;
   const pat = p.mode === "pattern";
   $("r-sub").textContent = `${pat ? "PATTERN mode. " : ""}${o.data.days} days of ${o.data.interval} MFP candles, ${wat(o.data.from_ms)} to ${wat(o.data.to_ms)} WAT. ` +
@@ -155,6 +167,7 @@ function render(o) {
       `stop ${g.risk_atr.toFixed(2)} ATR, target ${g.reward_atr.toFixed(2)} ATR. Expiry ${p.expiry}, time stop ${p.max_hold}`) + (p.trend_filter ? ", trend filter on." : ".");
   const [cls, label] = badgeFor(s.verdict);
   $("badge").className = "badge " + cls; $("badge").textContent = label;
+  $("verdict-card").className = "verdict-card " + cls;
   $("verdict").textContent = "Engine verdict: " + s.verdict + ".";
   const warns = [];
   if (!pat && Math.abs(g.entry_atr) > 3) warns.push(`Entry is ${Math.abs(g.entry_atr).toFixed(1)} ATR from the current price, so most replays will not fill.`);
@@ -220,28 +233,32 @@ function drawChart(tr) {
   const pts = [{ x: 0, y: 0 }]; let eq = 0;
   closed.forEach((t, i) => { eq += t.r_net; pts.push({ x: i + 1, y: eq, t }); });
   const L = 46, R = 14, T = 12, B = 28, w = W - L - R, h = H - T - B;
-  c.font = "11px ui-monospace,Menlo,monospace"; c.fillStyle = "#7c879b";
+  c.font = "11px ui-monospace,Menlo,monospace"; c.fillStyle = "#8a9ba7";
   if (closed.length === 0) { c.fillText("No closed trades to chart.", L, H / 2); return; }
   let lo = Math.min(0, ...pts.map(p => p.y)), hi = Math.max(0, ...pts.map(p => p.y));
   if (hi - lo < 1) { hi += .5; lo -= .5; }
   const padY = (hi - lo) * .08; lo -= padY; hi += padY;
   const X = x => L + (x / Math.max(1, pts.length - 1)) * w, Y = y => T + (hi - y) / (hi - lo) * h;
   const stepR = niceStep((hi - lo) / 5);
-  c.strokeStyle = "#1d2433"; c.lineWidth = 1;
+  c.strokeStyle = "#13212b"; c.lineWidth = 1;
   for (let v = Math.ceil(lo / stepR) * stepR; v <= hi; v += stepR) {
     c.beginPath(); c.moveTo(L, Y(v)); c.lineTo(W - R, Y(v)); c.stroke();
     c.fillText((v > 0 ? "+" : "") + v.toFixed(stepR < 1 ? 1 : 0) + "R", 4, Y(v) + 4);
   }
-  c.strokeStyle = "#3a4458"; c.setLineDash([4, 4]); c.beginPath(); c.moveTo(L, Y(0)); c.lineTo(W - R, Y(0)); c.stroke(); c.setLineDash([]);
-  const last = pts[pts.length - 1].y, col = last >= 0 ? "#22c08a" : "#ef5a5a";
+  c.strokeStyle = "#2a4655"; c.setLineDash([4, 4]); c.beginPath(); c.moveTo(L, Y(0)); c.lineTo(W - R, Y(0)); c.stroke(); c.setLineDash([]);
+  const col = "#2ee6ff";
+  const top = Math.min(...pts.map(p => Y(p.y))), grd = c.createLinearGradient(0, top, 0, Y(0));
+  grd.addColorStop(0, "rgba(46,230,255,.28)"); grd.addColorStop(1, "rgba(46,230,255,0)");
+  const grdN = c.createLinearGradient(0, Y(0), 0, T + h); grdN.addColorStop(0, "rgba(46,230,255,0)"); grdN.addColorStop(1, "rgba(46,230,255,.14)");
   c.beginPath(); pts.forEach((p, i) => i ? c.lineTo(X(p.x), Y(p.y)) : c.moveTo(X(p.x), Y(p.y)));
   c.lineTo(X(pts.length - 1), Y(0)); c.lineTo(X(0), Y(0)); c.closePath();
-  c.fillStyle = last >= 0 ? "rgba(34,192,138,.10)" : "rgba(239,90,90,.10)"; c.fill();
+  c.save(); c.clip(); c.fillStyle = grd; c.fillRect(L, T, w, Y(0) - T); c.fillStyle = grdN; c.fillRect(L, Y(0), w, T + h - Y(0)); c.restore();
   c.beginPath(); pts.forEach((p, i) => i ? c.lineTo(X(p.x), Y(p.y)) : c.moveTo(X(p.x), Y(p.y)));
-  c.strokeStyle = col; c.lineWidth = 2; c.stroke();
+  c.strokeStyle = col; c.lineWidth = 2.2; c.lineJoin = "round"; c.shadowColor = "rgba(46,230,255,.7)"; c.shadowBlur = 10; c.stroke(); c.shadowBlur = 0;
   pts.slice(1).forEach(p => { c.beginPath(); c.arc(X(p.x), Y(p.y), 3, 0, 7);
-    c.fillStyle = p.t.status === "tp" ? "#22c08a" : p.t.status === "sl" ? "#ef5a5a" : "#4c8dff"; c.fill(); });
-  c.fillStyle = "#7c879b";
+    c.fillStyle = p.t.status === "tp" ? "#3ccf91" : p.t.status === "sl" ? "#f2687a" : "#19c8ff"; c.fill();
+    c.strokeStyle = "#05070a"; c.lineWidth = 1.2; c.stroke(); });
+  c.fillStyle = "#8a9ba7";
   c.fillText("trade 1", L, H - 8);
   const endLbl = `trade ${closed.length} · ${wat(closed[closed.length - 1].exit)} WAT`;
   c.fillText(endLbl, W - R - c.measureText(endLbl).width, H - 8);

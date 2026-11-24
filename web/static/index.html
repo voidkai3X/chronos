@@ -2,131 +2,185 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CHRONOS</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#05070a">
+<meta name="description" content="CHRONOS: backtest your trade setup on real market history. Read-only public market data.">
+<title>CHRONOS · Backtest your setup on real market history</title>
+<link rel="icon" href="/static/assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/static/assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/static/assets/apple-touch-icon.png">
+<link rel="preload" href="/static/assets/fonts/inter-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header class="top">
-  <div class="brand"><span class="logo">CHRONOS</span></div>
-  <div class="sub">AI-assisted trading research and backtesting on MyFundedPerps market data. Read-only public market data. No keys, no orders.</div>
+<div class="bg-glow" aria-hidden="true"></div>
+
+<header class="hero">
+  <div class="hero-in">
+    <a class="brand" href="/" aria-label="CHRONOS home">
+      <img class="mark" src="/static/assets/chronos-mark.svg" alt="" width="120" height="60">
+      <span class="wordmark">CHRONOS</span>
+    </a>
+    <div class="hero-copy">
+      <h1>Backtest your setup on real market history</h1>
+      <p class="sub">Replay your entry, stop and target on past MyFundedPerps candles. Read-only public market data: no keys, no orders.</p>
+    </div>
+    <ul class="hero-pills" aria-label="How it works">
+      <li><span class="dot"></span>15m candle simulation</li>
+      <li><span class="dot"></span>Fees included</li>
+      <li><span class="dot"></span>No look-ahead</li>
+    </ul>
+  </div>
 </header>
 
 <main class="wrap">
-  <section class="panel form-panel">
-    <form id="f" autocomplete="off">
-      <label class="lbl">Market</label>
+  <section class="panel form-panel" aria-labelledby="setup-h">
+    <div class="panel-title"><h2 id="setup-h">Your setup</h2><span class="step-hint">1 · Market · 2 · Levels · 3 · Run</span></div>
+    <form id="f" autocomplete="off" novalidate>
+      <label class="lbl" for="market">Market</label>
       <div class="ac">
-        <input id="market" type="text" placeholder="Search BTC, XAU, AAPL, EURUSD..." required>
-        <ul id="ac-list" class="ac-list" hidden></ul>
+        <svg class="ac-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="market" type="text" placeholder="Search BTC, XAU, AAPL, EURUSD..." required role="combobox" aria-autocomplete="list" aria-controls="ac-list" aria-expanded="false" inputmode="search" enterkeyhint="search">
+        <ul id="ac-list" class="ac-list" role="listbox" hidden></ul>
       </div>
-      <div class="price-line"><span id="mkt-id" class="muted"></span><span id="price" class="price"></span></div>
+      <div class="price-line"><span id="mkt-id" class="mkt-id"></span><span id="price" class="price"></span></div>
 
-      <label class="lbl">Side</label>
-      <div class="toggle" id="side">
-        <button type="button" data-side="long" class="on long">Long</button>
-        <button type="button" data-side="short" class="short">Short</button>
-      </div>
-
-      <label class="lbl">Mode</label>
-      <div class="toggle" id="mode">
-        <button type="button" data-mode="every-close" class="on">Every 4h close</button>
-        <button type="button" data-mode="pattern">Pattern only</button>
-      </div>
-      <div id="pattern-opts" class="grid2" hidden>
+      <div class="seg-row">
         <div>
-          <label class="lbl">Zone timeframe</label>
-          <select id="zone-tf">
+          <span class="lbl">Side</span>
+          <div class="toggle seg" id="side" role="group" aria-label="Side">
+            <button type="button" data-side="long" class="on long">▲ Long</button>
+            <button type="button" data-side="short" class="short">▼ Short</button>
+          </div>
+        </div>
+        <div>
+          <span class="lbl">Mode</span>
+          <div class="toggle seg" id="mode" role="group" aria-label="Mode">
+            <button type="button" data-mode="every-close" class="on">Every 4h close</button>
+            <button type="button" data-mode="pattern">Pattern only</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="pattern-opts" class="grid2 sub-opts" hidden>
+        <div>
+          <label class="lbl" for="zone-tf">Zone timeframe</label>
+          <div class="sel"><select id="zone-tf">
             <option value="30m">30m</option><option value="1h">1h</option><option value="4h" selected>4h</option>
-          </select>
+          </select></div>
         </div>
         <div>
-          <label class="lbl">SL beyond zone (ATR)</label>
-          <input id="sl-buf" type="number" step="0.05" min="0" max="10" placeholder="auto">
+          <label class="lbl" for="sl-buf">SL beyond zone (ATR)</label>
+          <input id="sl-buf" type="number" step="0.05" min="0" max="10" placeholder="auto" inputmode="decimal">
         </div>
       </div>
 
-      <div id="style-opts" hidden>
-        <label class="lbl">Entry style</label>
-        <select id="entry-style">
+      <div id="style-opts" class="sub-opts" hidden>
+        <label class="lbl" for="entry-style">Entry style</label>
+        <div class="sel"><select id="entry-style">
           <option value="limit" selected>Limit at the zone edge (blind, first retest)</option>
           <option value="sweep">Wait for a sweep of the zone's far edge, enter on the close back inside</option>
           <option value="confirm">Wait for a 15m break of structure after the tap</option>
-        </select>
+        </select></div>
       </div>
 
-      <div class="grid3">
-        <div><label class="lbl">Entry</label><input id="entry" type="number" step="any" required></div>
-        <div><label class="lbl">Take profit</label><input id="tp" type="number" step="any" required></div>
-        <div><label class="lbl">Stop loss</label><input id="sl" type="number" step="any" required></div>
+      <div class="grid3 levels">
+        <div><label class="lbl" for="entry">Entry</label><input id="entry" type="number" step="any" required inputmode="decimal"></div>
+        <div><label class="lbl lbl-tp" for="tp">Take profit</label><input id="tp" type="number" step="any" required inputmode="decimal"></div>
+        <div><label class="lbl lbl-sl" for="sl">Stop loss</label><input id="sl" type="number" step="any" required inputmode="decimal"></div>
       </div>
-      <div class="rr-line"><span>R:R</span><b id="rr">-</b><span id="rr-note" class="muted"></span></div>
+      <div class="rr-line"><span class="rr-k">R:R</span><b id="rr">-</b><span id="rr-note" class="muted"></span></div>
       <div id="lvl-err" class="inline-err" hidden></div>
 
       <div class="grid2">
         <div>
-          <label class="lbl">Test window: <b id="days-v">60</b> days</label>
-          <input id="days" type="range" min="30" max="60" step="1" value="60">
+          <label class="lbl" for="days">Test window: <b id="days-v">90</b> days</label>
+          <input id="days" type="range" min="30" max="90" step="1" value="90">
         </div>
         <div>
-          <label class="lbl">Order expiry <span class="muted" id="exp-note"></span></label>
-          <select id="expiry">
+          <label class="lbl" for="expiry">Order expiry <span class="muted" id="exp-note"></span></label>
+          <div class="sel"><select id="expiry">
             <option value="24h">24h</option><option value="48h">48h</option>
             <option value="72h" selected>72h</option><option value="5d">5d</option><option value="7d">7d</option>
-          </select>
+          </select></div>
         </div>
       </div>
-      <label class="chk"><input id="trend" type="checkbox"> Trend filter (only place when 4h EMA50 slope agrees with the side)</label>
-      <label class="chk"><input id="insights" type="checkbox" checked> Insights: explain the result and compare limit / wider stop / sweep / confirm entries (a few seconds more)</label>
+      <label class="chk"><input id="trend" type="checkbox"><span class="box" aria-hidden="true"></span><span>Trend filter <span class="muted">only place when the 4h EMA50 slope agrees with the side</span></span></label>
+      <label class="chk"><input id="insights" type="checkbox" checked><span class="box" aria-hidden="true"></span><span>Insights <span class="muted">explain the result and compare limit / wider stop / sweep / confirm entries (a few seconds more)</span></span></label>
 
       <button id="run" class="run" type="submit"><span class="spin" hidden></span><span class="txt">Run test</span></button>
-      <div id="form-err" class="err" hidden></div>
+      <div id="form-err" class="err" role="alert" hidden></div>
     </form>
-    <div class="note">
-      <b>Every 4h close:</b> your entry, stop and target become a shape scaled by 4h ATR, placed at every 4h close
-      (one order or trade at a time). It tests the distances, not the reason you took the trade.<br>
-      <b>Pattern only:</b> the tester finds supply zones (for shorts) or demand zones (for longs) by rule: 1-6 small
+    <details class="note">
+      <summary>How the test works</summary>
+      <p><b>Every 4h close:</b> your entry, stop and target become a shape scaled by 4h ATR, placed at every 4h close
+      (one order or trade at a time). It tests the distances, not the reason you took the trade.</p>
+      <p><b>Pattern only:</b> the tester finds supply zones (for shorts) or demand zones (for longs) by rule: 1-6 small
       candles, then a strong move of at least 1 ATR away. When price is away from a fresh zone it rests a limit at the
-      zone's near edge, stop beyond the far edge, target at your R:R. Only candles already closed are used.<br>
-      <b>Entry styles (pattern only):</b> <i>sweep</i> waits for price to poke past the zone's far edge (where stops sit)
+      zone's near edge, stop beyond the far edge, target at your R:R. Only candles already closed are used.</p>
+      <p><b>Entry styles (pattern only):</b> <i>sweep</i> waits for price to poke past the zone's far edge (where stops sit)
       and close back inside; <i>confirm</i> waits for a 15m candle to close through the last 15m swing after the tap.
-      Both put the stop beyond the move's extreme and the zone.<br>
-      Both modes are simulated on 15m MFP candles with MFP fees. If TP and SL hit in the same candle it counts as a loss.
-    </div>
+      Both put the stop beyond the move's extreme and the zone.</p>
+      <p>Both modes are simulated on 15m MFP candles with MFP fees. If TP and SL hit in the same candle it counts as a loss.</p>
+    </details>
   </section>
 
-  <section class="results" id="results">
-    <div class="empty" id="empty">Enter a setup and run the test. A 60-day run takes a few seconds once candles are cached, longer the first time for a market.</div>
+  <section class="results" id="results" aria-live="polite">
+    <div class="empty" id="empty">
+      <img class="empty-mark" src="/static/assets/chronos-mark.svg" alt="" width="120" height="60">
+      <h3>Ready when you are</h3>
+      <p>Pick a market, enter your entry, take profit and stop loss, then run the test. Once a market's candles are cached a run takes a few seconds. The first run on a market takes longer.</p>
+      <ol class="empty-steps"><li>Choose a market</li><li>Set side and levels</li><li>Run test</li></ol>
+    </div>
+
+    <div class="skel" id="skel" hidden aria-hidden="true">
+      <div class="sk sk-verdict"></div>
+      <div class="sk-cards"><div class="sk"></div><div class="sk"></div><div class="sk"></div><div class="sk"></div></div>
+      <div class="sk sk-chart"></div>
+      <div class="sk-status"><span class="spin"></span><span id="skel-txt">Fetching candles and replaying your setup...</span></div>
+    </div>
+
     <div id="res" hidden>
-      <div class="res-head">
-        <div>
-          <div class="res-title" id="r-title"></div>
-          <div class="muted small" id="r-sub"></div>
+      <div class="verdict-card" id="verdict-card">
+        <div class="res-head">
+          <div class="res-main">
+            <div class="eyebrow">Result</div>
+            <div class="res-title" id="r-title"></div>
+          </div>
+          <div class="badge" id="badge"></div>
         </div>
-        <div class="badge" id="badge"></div>
+        <div class="verdict" id="verdict"></div>
+        <div class="r-sub" id="r-sub"></div>
+        <!-- slot: data provenance line (sources + days actually covered) -->
+        <div class="provenance" id="provenance" hidden></div>
       </div>
-      <div class="verdict muted small" id="verdict"></div>
       <div class="warn" id="warn" hidden></div>
       <div class="cards" id="cards"></div>
+
+      <div class="panel chart-panel">
+        <div class="panel-h"><span>Equity curve</span><span class="muted small">cumulative R, after fees</span></div>
+        <canvas id="chart" height="260"></canvas>
+        <div class="legend"><span><i class="lg tp"></i>TP</span><span><i class="lg sl"></i>SL</span><span><i class="lg time"></i>Time exit</span></div>
+      </div>
+
       <div class="panel ins-panel" id="ins" hidden>
-        <div class="panel-h">Insights <span class="muted small">rule-based, from this test's own numbers</span></div>
+        <div class="panel-h"><span class="ph-ico" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/></svg></span>
+          <span>Insights</span><span class="muted small">rule-based, from this test's own numbers</span></div>
         <ul class="ins-list" id="ins-list"></ul>
-        <div class="panel-h sub-h">What-if comparison <span class="muted small" id="ins-note"></span></div>
+        <div class="panel-h sub-h"><span>What-if comparison</span><span class="muted small" id="ins-note"></span></div>
         <div class="tbl-wrap"><table id="ins-tbl">
           <thead><tr><th>Variant</th><th>Scope</th><th class="r">SL beyond zone</th><th class="r">Closed</th><th class="r">TP/SL/time</th>
             <th class="r">Win</th><th class="r">Break-even</th><th class="r">Avg R</th><th class="r">Total R</th><th class="r">t</th><th>Evidence</th></tr></thead>
           <tbody></tbody></table></div>
         <div class="ins-best" id="ins-best"></div>
-        <div class="panel-h sub-h">Suggested fixes</div>
+        <div class="panel-h sub-h"><span>Suggested fixes</span></div>
         <ul class="ins-fixes" id="ins-fixes"></ul>
         <div class="ins-disc" id="ins-disc"></div>
       </div>
-      <div class="panel chart-panel">
-        <div class="panel-h">Equity curve (cumulative R, after fees)</div>
-        <canvas id="chart" height="260"></canvas>
-      </div>
+
       <div class="panel">
-        <div class="panel-h">Simulated trades <span class="muted small" id="t-count"></span></div>
+        <div class="panel-h"><span>Simulated trades</span><span class="muted small" id="t-count"></span></div>
         <div class="tbl-wrap">
           <table id="trades">
             <thead><tr><th>#</th><th>Placed (WAT)</th><th>Zone (near / far edge)</th><th>Filled (WAT)</th><th>Entry</th><th>Exit (WAT)</th><th>Exit price</th><th>Result</th><th class="r">R</th></tr></thead>
@@ -134,13 +188,19 @@
           </table>
         </div>
       </div>
-      <div class="muted small" id="meta"></div>
+      <div class="meta" id="meta"></div>
     </div>
   </section>
 </main>
 
-<footer class="foot">Backtest on past MFP candles only. Not a prediction, not advice.
-  <span class="muted">Limitation: pattern mode's zones are a rule-based approximation of zones a trader draws by eye.</span></footer>
+<footer class="foot">
+  <div class="foot-in">
+    <div class="foot-brand"><img src="/static/assets/chronos-mark.svg" alt="" width="40" height="20"><span>CHRONOS</span></div>
+    <p><b>Past results only.</b> Every number here comes from replaying past MFP candles. It is not a prediction, not financial advice, and no guarantee of profit.</p>
+    <p class="muted">Limitation: pattern mode's zones are a rule-based approximation of zones a trader draws by eye.</p>
+  </div>
+</footer>
+<div class="toasts" id="toasts" aria-live="assertive"></div>
 <script src="/static/app.js"></script>
 </body>
 </html>
