@@ -1,0 +1,15 @@
+Setup test: SHORT veranta|EURUSD  (60d of 15m MFP candles, 28 Sep 01:00 WAT to 24 Nov 22:15 WAT)
+Setup: entry 1.11993 (limit), TP 1.08353, SL 1.12886, R:R 1:4.08. Price now 1.09657, 4h ATR 0.002575.
+Replayed as: entry +9.07 ATR from price, stop 3.47 ATR (0.80%), target 14.13 ATR (3.25%); scaled by atr. New order at each 4h close when flat, expiry 72h, time stop 7d.
+
+Orders 17: filled 0, unfilled 16, still open at end 1.
+Closed 0: TP 0, SL 0.
+Win rate n/a vs break-even 20% (after fees; 20% before).
+Average R +0.00 net (+0.00 gross). Total +0.0R. Per order placed +0.00R.
+Worst losing streak 0. Worst drawdown 0.0R. First half n/aR, second half n/aR avg.
+Stop check: 0 of 0 stop-outs (n/a) still reached TP within 72h of the fill; 0 of them (n/a) only poked 1.0 ATR or less past the stop first.
+Warning: entry is 9.1 ATR from current price, so most replays will not fill. Check the levels.
+
+Verdict: too few samples (0 closed trades, need 20).
+Fees used: 0.0025% per fill + 0.005%/day swap (forex, MFP standard).
+Backtest on past candles only. Not a prediction, not advice.

@@ -1,0 +1,15 @@
+Setup test (PATTERN mode): SHORT veranta|AUDUSD  (60d of 15m MFP candles, 27 Sep 22:30 WAT to 24 Nov 22:15 WAT)
+Your setup: entry 0.66629, TP 0.65881, SL 0.66833, R:R 1:3.67. Price now 0.66404.
+Replayed as: a limit at the near edge of each fresh supply zone on 30m candles, SL 1.75 x 30m ATR beyond the far edge (derived from your SL: no detected zone contains your entry; your risk 2.71 ATR minus median zone height 0.96 ATR), TP 3.67R. Checked at every 30m close when flat, expiry 30d, time stop 7d; zone usable until touched 1x, closed through, or 30d old.
+Zones found in window: 24 (touched 20, invalidated 17); zones traded (limit filled): 14.
+
+Orders 26: filled 14, unfilled 12, still open at end 1.
+Closed 13: TP 3, SL 10.
+Win rate 23% vs break-even 22% (after fees; 21% before).
+Average R +0.03 net (+0.08 gross). Total +0.4R. Per order placed +0.01R.
+Worst losing streak 10. Worst drawdown -10.4R. First half -0.279R, second half 0.297R avg.
+Stop check: 5 of 10 stop-outs (50%) still reached TP within 7d of the fill; 1 of them (10%) only poked 1.0 ATR or less past the stop first.
+
+Verdict: too few samples (13 closed trades, need 20).
+Fees used: 0.0025% per fill + 0.005%/day swap (forex, MFP standard).
+Backtest on past candles only. Not a prediction, not advice.

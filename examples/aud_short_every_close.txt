@@ -1,0 +1,15 @@
+Setup test: SHORT veranta|AUDUSD  (60d of 15m MFP candles, 28 Sep 01:00 WAT to 24 Nov 22:15 WAT)
+Setup: entry 0.66629 (limit), TP 0.65881, SL 0.66833, R:R 1:3.67. Price now 0.66404, 4h ATR 0.002373.
+Replayed as: entry +0.95 ATR from price, stop 0.86 ATR (0.31%), target 3.15 ATR (1.12%); scaled by atr. New order at each 4h close when flat, expiry 72h, time stop 7d.
+
+Orders 20: filled 8, unfilled 11, still open at end 1.
+Closed 8: TP 2, SL 5, time exits 1.
+Win rate 25% vs break-even 22% (after fees; 21% before).
+Average R +0.32 net (+0.37 gross). Total +2.5R. Per order placed +0.13R.
+Worst losing streak 4. Worst drawdown -4.2R. First half 0.501R, second half 0.134R avg.
+Stop check: 1 of 5 stop-outs (20%) still reached TP within 72h of the fill; 1 of them (20%) only poked 1.0 ATR or less past the stop first.
+  -> Stop looks too tight: a good share of losers were wicks through the stop before the move.
+
+Verdict: too few samples (8 closed trades, need 20).
+Fees used: 0.0025% per fill + 0.005%/day swap (forex, MFP standard).
+Backtest on past candles only. Not a prediction, not advice.

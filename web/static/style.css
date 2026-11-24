@@ -67,3 +67,5 @@ td{padding:6px 8px;border-bottom:1px solid #1b2230;white-space:nowrap}
 .tag.tp{background:rgba(34,192,138,.15);color:var(--grn)} .tag.sl{background:rgba(239,90,90,.15);color:var(--red)}
 .tag.time{background:rgba(76,141,255,.15);color:var(--acc)} .tag.unf{background:#1d2433;color:var(--mut)}
 .foot{border-top:1px solid var(--line);padding:14px 28px;font-size:13px;display:flex;gap:16px;flex-wrap:wrap}
+.toggle button.on:not(.long):not(.short){background:rgba(76,141,255,.15);color:#4c8dff}
+#pattern-opts{margin-top:10px}

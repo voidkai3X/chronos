@@ -109,7 +109,7 @@ def _num(d, k):
 def run_test():
     d = request.get_json(silent=True)
     if not isinstance(d, dict):
-        return err("send a JSON body: {market, side, entry, tp, sl, days, expiry, trend_filter}")
+        return err("send a JSON body: {market, side, entry, tp, sl, days, expiry, trend_filter, mode, zone_tf, sl_buffer_atr}")
     try:
         market = str(d.get("market") or "").strip()
         if not market:
@@ -133,6 +133,22 @@ def run_test():
         if not 3600_000 <= exp_ms <= 14 * 86400_000:
             raise ValueError("expiry must be between 1h and 14d")
         trend = bool(d.get("trend_filter"))
+        mode = str(d.get("mode") or "every-close").lower()
+        if mode not in ("every-close", "pattern"):
+            raise ValueError("mode must be 'every-close' or 'pattern'")
+        zone_tf = str(d.get("zone_tf") or "4h").lower()
+        if zone_tf not in ("30m", "1h", "4h"):
+            raise ValueError("zone_tf must be 30m, 1h or 4h")
+        slb = d.get("sl_buffer_atr")
+        if slb not in (None, ""):
+            try:
+                slb = float(slb)
+            except (TypeError, ValueError):
+                raise ValueError("sl_buffer_atr must be a number")
+            if not 0 <= slb <= 10:
+                raise ValueError("sl_buffer_atr must be between 0 and 10")
+        else:
+            slb = None
         m = resolve(market)
     except ValueError as e:
         return err(str(e))
@@ -145,7 +161,11 @@ def run_test():
                 jp = os.path.join(td, "out.json")
                 cmd = [sys.executable, os.path.join(ENGINE_DIR, "tester.py"), m["market_id"], side,
                        f"--entry={entry!r}", f"--tp={tp!r}", f"--sl={sl!r}", "--days", str(days),
-                       "--expiry", expiry, "--json", "--json-out", jp] + (["--trend-filter"] if trend else [])
+                       "--json", "--json-out", jp, "--mode", mode] + (["--trend-filter"] if trend else [])
+                if mode == "pattern":  # pattern mode: limit rests on a zone until touched/invalidated (engine default)
+                    cmd += ["--zone-tf", zone_tf] + ([f"--sl-buffer-atr={slb!r}"] if slb is not None else [])
+                else:
+                    cmd += ["--expiry", expiry]
                 t0 = time.time()
                 try:
                     p = subprocess.run(cmd, cwd=ENGINE_DIR, capture_output=True, text=True, timeout=RUN_TIMEOUT)

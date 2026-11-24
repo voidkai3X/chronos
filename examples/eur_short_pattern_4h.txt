@@ -1,0 +1,15 @@
+Setup test (PATTERN mode): SHORT veranta|EURUSD  (60d of 15m MFP candles, 28 Sep 01:00 WAT to 24 Nov 22:15 WAT)
+Your setup: entry 1.11993, TP 1.08353, SL 1.12886, R:R 1:4.08. Price now 1.09657.
+Replayed as: a limit at the near edge of each fresh supply zone on 4h candles, SL 3.00 x 4h ATR beyond the far edge (derived from your SL: your SL is 3.00 ATR past the far edge of the detected zone your entry sits in), TP 4.08R. Checked at every 4h close when flat, expiry 30d, time stop 7d; zone usable until touched 1x, closed through, or 30d old.
+Zones found in window: 5 (touched 5, invalidated 3); zones traded (limit filled): 3.
+
+Orders 6: filled 3, unfilled 3, still open at end 0.
+Closed 3: TP 0, SL 0, time exits 3.
+Win rate 0% vs break-even 20% (after fees; 20% before).
+Average R +0.11 net (+0.15 gross). Total +0.3R. Per order placed +0.05R.
+Worst losing streak 1. Worst drawdown -0.5R. First half 0.274R, second half 0.026R avg.
+Stop check: 0 of 0 stop-outs (n/a) still reached TP within 7d of the fill; 0 of them (n/a) only poked 1.0 ATR or less past the stop first.
+
+Verdict: too few samples (3 closed trades, need 20).
+Fees used: 0.0025% per fill + 0.005%/day swap (forex, MFP standard).
+Backtest on past candles only. Not a prediction, not advice.

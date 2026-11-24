@@ -1,6 +1,6 @@
 (() => {
 const $ = id => document.getElementById(id);
-let markets = [], side = "long", chosen = null, acIdx = -1, lastResult = null;
+let markets = [], side = "long", mode = "every-close", chosen = null, acIdx = -1, lastResult = null;
 
 const fmt = (x, d) => x == null ? "-" : Number(x).toLocaleString("en-US", {maximumFractionDigits: d ?? 6});
 const px = x => { if (x == null) return "-"; const a = Math.abs(x); return fmt(x, a >= 1000 ? 2 : a >= 1 ? 4 : 6); };
@@ -69,6 +69,14 @@ $("side").addEventListener("click", e => {
   [...$("side").children].forEach(x => x.classList.toggle("on", x === b));
   updateRR();
 });
+$("mode").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  mode = b.dataset.mode;
+  [...$("mode").children].forEach(x => x.classList.toggle("on", x === b));
+  $("pattern-opts").hidden = mode !== "pattern";
+  $("expiry").disabled = mode === "pattern";
+  $("exp-note").textContent = mode === "pattern" ? "(not used in pattern mode)" : "";
+});
 function levelError() {
   const e = parseFloat($("entry").value), t = parseFloat($("tp").value), s = parseFloat($("sl").value);
   if ([e, t, s].some(isNaN)) return null;
@@ -109,7 +117,8 @@ async function run() {
   if (le === null) return showErr("Enter entry, TP and SL.");
   if (le) return showErr(le);
   const body = { market: mk, side, entry: +$("entry").value, tp: +$("tp").value, sl: +$("sl").value,
-    days: +$("days").value, expiry: $("expiry").value, trend_filter: $("trend").checked };
+    days: +$("days").value, expiry: $("expiry").value, trend_filter: $("trend").checked, mode };
+  if (mode === "pattern") { body.zone_tf = $("zone-tf").value; if ($("sl-buf").value !== "") body.sl_buffer_atr = +$("sl-buf").value; }
   setBusy(true);
   try {
     const r = await fetch("/api/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -135,19 +144,24 @@ function render(o) {
   const g = o.setup, s = o.result, m = o.market, p = o.params;
   $("empty").hidden = true; $("res").hidden = false;
   $("r-title").textContent = `${g.side.toUpperCase()} ${m.market_id}  ·  entry ${fmt(g.entry)}  TP ${fmt(g.tp)}  SL ${fmt(g.sl)}  ·  1:${g.rr.toFixed(2)}`;
-  $("r-sub").textContent = `${o.data.days} days of ${o.data.interval} MFP candles, ${wat(o.data.from_ms)} to ${wat(o.data.to_ms)} WAT. ` +
-    `Price at test ${fmt(g.ref)}, 4h ATR ${fmt(g.atr, 4)}. Replayed as entry ${g.entry_atr >= 0 ? "+" : ""}${g.entry_atr.toFixed(2)} ATR (${g.entry_type}), ` +
-    `stop ${g.risk_atr.toFixed(2)} ATR, target ${g.reward_atr.toFixed(2)} ATR. Expiry ${p.expiry}, time stop ${p.max_hold}` + (p.trend_filter ? ", trend filter on." : ".");
+  const pat = p.mode === "pattern";
+  $("r-sub").textContent = `${pat ? "PATTERN mode. " : ""}${o.data.days} days of ${o.data.interval} MFP candles, ${wat(o.data.from_ms)} to ${wat(o.data.to_ms)} WAT. ` +
+    (pat ? `Price at test ${fmt(g.ref)}. Replayed as a limit at the near edge of each fresh ${g.side === "short" ? "supply" : "demand"} zone on ${p.zone_tf} candles, ` +
+      `stop ${p.sl_buffer_atr.toFixed(2)} ATR beyond the far edge (${p.sl_buffer_source.how}), target ${g.rr.toFixed(2)}R. Time stop ${p.max_hold}`
+    : `Price at test ${fmt(g.ref)}, 4h ATR ${fmt(g.atr, 4)}. Replayed as entry ${g.entry_atr >= 0 ? "+" : ""}${g.entry_atr.toFixed(2)} ATR (${g.entry_type}), ` +
+      `stop ${g.risk_atr.toFixed(2)} ATR, target ${g.reward_atr.toFixed(2)} ATR. Expiry ${p.expiry}, time stop ${p.max_hold}`) + (p.trend_filter ? ", trend filter on." : ".");
   const [cls, label] = badgeFor(s.verdict);
   $("badge").className = "badge " + cls; $("badge").textContent = label;
   $("verdict").textContent = "Engine verdict: " + s.verdict + ".";
   const warns = [];
-  if (Math.abs(g.entry_atr) > 3) warns.push(`Entry is ${Math.abs(g.entry_atr).toFixed(1)} ATR from the current price, so most replays will not fill.`);
+  if (!pat && Math.abs(g.entry_atr) > 3) warns.push(`Entry is ${Math.abs(g.entry_atr).toFixed(1)} ATR from the current price, so most replays will not fill.`);
   if (s.shallow_sweep_pct_of_losses && s.sl >= 5 && s.shallow_sweep_pct_of_losses >= 0.2) warns.push("Stop looks too tight: a good share of losers wicked through the stop before the move reached TP.");
   if (p.trend_filter) warns.push(`Trend filter skipped ${o.skipped_by_trend} eligible 4h closes. 4h trend now: ${o.trend_now || "n/a"}.`);
   $("warn").hidden = !warns.length; $("warn").innerHTML = warns.join("<br>");
   const wrCls = s.win_rate == null ? "" : (s.win_rate > s.breakeven_win_rate ? "pos" : "neg");
-  $("cards").innerHTML = [
+  const zcard = pat && o.zones ? [card("Zones found", o.zones.zones_found,
+    `${p.zone_tf} ${g.side === "short" ? "supply" : "demand"} zones · touched ${o.zones.zones_touched} · broken ${o.zones.zones_invalidated} · traded ${o.zones.zones_traded}`)] : [];
+  $("cards").innerHTML = [...zcard,
     card("Orders", s.placed, `filled ${s.fills} · unfilled ${s.unfilled}${s.open_at_end ? ` · open ${s.open_at_end}` : ""}`),
     card("Closed trades", s.closed, `TP ${s.tp} · SL ${s.sl}${s.time_exits ? ` · time ${s.time_exits}` : ""}`),
     card("Win rate", pct(s.win_rate), `break-even ${pct(s.breakeven_win_rate)} after fees (${pct(s.breakeven_win_rate_gross)} before)`, wrCls),
@@ -168,10 +182,11 @@ function renderTrades(tr) {
     const lbl = { tp: "TP", sl: "SL", time: "Time exit", unfilled: "Unfilled", open_at_end: "Open", pending_at_end: "Pending" }[st] || st;
     const sweep = st === "sl" && t.sl_then_tp ? ` <span class="muted" title="Price still reached TP after the stop-out">swept</span>` : "";
     const r = t.r_net == null ? "" : `<span class="${t.r_net > 0 ? "pos" : "neg"}">${sgnR(t.r_net)}</span>`;
-    return `<tr><td>${i + 1}</td><td>${wat(t.placed)}</td><td>${t.filled ? wat(t.filled) : "-"}</td><td>${px(t.fill_px ?? t.entry)}</td>
+    const zn = t.zone_proximal != null ? `${px(t.zone_proximal)} / ${px(t.zone_distal)}` : "-";
+    return `<tr><td>${i + 1}</td><td>${wat(t.placed)}</td><td>${zn}</td><td>${t.filled ? wat(t.filled) : "-"}</td><td>${px(t.fill_px ?? t.entry)}</td>
       <td>${t.exit ? wat(t.exit) : "-"}</td><td>${px(t.exit_px)}</td><td><span class="tag ${tag}">${lbl}</span>${sweep}</td><td class="r">${r}</td></tr>`;
   });
-  $("trades").querySelector("tbody").innerHTML = rows.join("") || `<tr><td colspan="8" class="muted">No orders were placed in the window.</td></tr>`;
+  $("trades").querySelector("tbody").innerHTML = rows.join("") || `<tr><td colspan="9" class="muted">No orders were placed in the window.</td></tr>`;
   $("t-count").textContent = `${tr.length} orders, times in WAT (UTC+1)`;
 }
 function drawChart(tr) {
@@ -224,6 +239,8 @@ function applyQuery() {
   if (q.get("days")) { $("days").value = q.get("days"); $("days-v").textContent = $("days").value; }
   if (q.get("expiry")) $("expiry").value = q.get("expiry");
   if (q.get("trend") === "1") $("trend").checked = true;
+  if (q.get("mode") === "pattern") $("mode").querySelector("[data-mode=pattern]").click();
+  if (q.get("zone_tf")) $("zone-tf").value = q.get("zone_tf");
   updateRR();
   if (q.get("run") === "1") run();
 }

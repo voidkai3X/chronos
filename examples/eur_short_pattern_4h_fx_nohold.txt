@@ -1,0 +1,20 @@
+BASKET test (pattern mode), SHORT, 6 markets, levels taken from veranta|EURUSD, zones on 4h, SL 3.00 ATR past the zone, TP 4.08R.
+
+  veranta|EURUSD     zones   5, orders   2, fills   1, TP  0, SL  0, time  0, win  n/a, avg +0.00R, total +0.0R
+  veranta|USDJPY     zones   1, orders   1, fills   1, TP  0, SL  1, time  0, win   0%, avg -1.10R, total -1.1R
+  veranta|AUDUSD     zones   5, orders   4, fills   2, TP  0, SL  1, time  0, win   0%, avg -1.05R, total -1.1R
+  veranta|GBPUSD     zones   3, orders   4, fills   1, TP  0, SL  1, time  0, win   0%, avg -1.08R, total -1.1R
+  veranta|USDCAD     zones   3, orders   2, fills   1, TP  0, SL  1, time  0, win   0%, avg -1.09R, total -1.1R
+  veranta|USDCHF     zones   1, orders   1, fills   1, TP  0, SL  1, time  0, win   0%, avg -1.01R, total -1.0R
+
+POOLED (all markets, trades in exit-time order):
+Zones found in window: 18, traded (filled) 7.
+Orders 14: filled 7, unfilled 5, still open at end 4.
+Closed 5: TP 0, SL 5.
+Win rate 0% vs break-even 20% (after fees; 20% before).
+Average R -1.07 net (-1.00 gross). Total -5.3R. Per order placed -0.38R.
+Worst losing streak 5. Worst drawdown -5.3R. First half -1.065R, second half -1.069R avg.
+Stop check: 0 of 5 stop-outs (0%) still reached TP within 7d of the fill; 0 of them (0%) only poked 1.0 ATR or less past the stop first.
+
+Verdict (pooled): too few samples (5 closed trades, need 20).
+Backtest on past candles only. Not a prediction, not advice.

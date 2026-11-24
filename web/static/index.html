@@ -28,6 +28,24 @@
         <button type="button" data-side="short" class="short">Short</button>
       </div>
 
+      <label class="lbl">Mode</label>
+      <div class="toggle" id="mode">
+        <button type="button" data-mode="every-close" class="on">Every 4h close</button>
+        <button type="button" data-mode="pattern">Pattern only</button>
+      </div>
+      <div id="pattern-opts" class="grid2" hidden>
+        <div>
+          <label class="lbl">Zone timeframe</label>
+          <select id="zone-tf">
+            <option value="30m">30m</option><option value="1h">1h</option><option value="4h" selected>4h</option>
+          </select>
+        </div>
+        <div>
+          <label class="lbl">SL beyond zone (ATR)</label>
+          <input id="sl-buf" type="number" step="0.05" min="0" max="10" placeholder="auto">
+        </div>
+      </div>
+
       <div class="grid3">
         <div><label class="lbl">Entry</label><input id="entry" type="number" step="any" required></div>
         <div><label class="lbl">Take profit</label><input id="tp" type="number" step="any" required></div>
@@ -42,7 +60,7 @@
           <input id="days" type="range" min="30" max="60" step="1" value="60">
         </div>
         <div>
-          <label class="lbl">Order expiry</label>
+          <label class="lbl">Order expiry <span class="muted" id="exp-note"></span></label>
           <select id="expiry">
             <option value="24h">24h</option><option value="48h">48h</option>
             <option value="72h" selected>72h</option><option value="5d">5d</option><option value="7d">7d</option>
@@ -55,9 +73,12 @@
       <div id="form-err" class="err" hidden></div>
     </form>
     <div class="note">
-      How it works: your entry, stop and target are turned into a shape scaled by 4h ATR, then that shape is placed at
-      <b>every 4h close</b> (one order or trade at a time) and simulated on 15m MFP candles with MFP fees.
-      It tests the setup's shape, not the reason you took it (sweep, BOS, zone). If TP and SL hit in the same candle it counts as a loss.
+      <b>Every 4h close:</b> your entry, stop and target become a shape scaled by 4h ATR, placed at every 4h close
+      (one order or trade at a time). It tests the distances, not the reason you took the trade.<br>
+      <b>Pattern only:</b> the tester finds supply zones (for shorts) or demand zones (for longs) by rule: 1-6 small
+      candles, then a strong move of at least 1 ATR away. When price is away from a fresh zone it rests a limit at the
+      zone's near edge, stop beyond the far edge, target at your R:R. Only candles already closed are used.<br>
+      Both are simulated on 15m MFP candles with MFP fees. If TP and SL hit in the same candle it counts as a loss.
     </div>
   </section>
 
@@ -82,7 +103,7 @@
         <div class="panel-h">Simulated trades <span class="muted small" id="t-count"></span></div>
         <div class="tbl-wrap">
           <table id="trades">
-            <thead><tr><th>#</th><th>Placed (WAT)</th><th>Filled (WAT)</th><th>Entry</th><th>Exit (WAT)</th><th>Exit price</th><th>Result</th><th class="r">R</th></tr></thead>
+            <thead><tr><th>#</th><th>Placed (WAT)</th><th>Zone (near / far edge)</th><th>Filled (WAT)</th><th>Entry</th><th>Exit (WAT)</th><th>Exit price</th><th>Result</th><th class="r">R</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -93,7 +114,7 @@
 </main>
 
 <footer class="foot">Backtest on past MFP candles only. Not a prediction, not advice.
-  <span class="muted">Limitation: it tests the setup's shape at every 4h close, not only where your pattern appears.</span></footer>
+  <span class="muted">Limitation: pattern mode's zones are a rule-based approximation of zones a trader draws by eye.</span></footer>
 <script src="/static/app.js"></script>
 </body>
 </html>

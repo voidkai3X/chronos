@@ -1,6 +1,6 @@
 # CHRONOS web app
 
-A small web front end for `../tester.py`. You pick an MFP market, a side, and entry, TP and SL. The page runs the engine and shows the verdict, stats, a cumulative-R equity curve and every simulated trade.
+A small web front end for `../tester.py`. You pick an MFP market, a side, entry, TP and SL, and a mode: Every 4h close or Pattern only (fresh supply/demand zone retests, with a zone-timeframe picker). The page runs the engine and shows the verdict, stats, a cumulative-R equity curve and every simulated trade.
 
 The CLI is unchanged. The web app calls `tester.py --json --json-out` in a subprocess and returns that JSON. `app.py` loads the engine from the repository root (the parent of this `web/` directory).
 
@@ -31,12 +31,14 @@ Candles are cached in `../candle_cache/` (shared with the CLI). The first run on
 - `POST /api/test` takes this JSON body:
   ```json
   {"market": "BTC", "side": "short", "entry": 64780, "tp": 54209, "sl": 66350,
-   "days": 60, "expiry": "72h", "trend_filter": false}
+   "days": 60, "expiry": "72h", "trend_filter": false,
+   "mode": "pattern", "zone_tf": "4h", "sl_buffer_atr": null}
   ```
   - Validation:
     - A long needs `sl < entry < tp`. A short needs `tp < entry < sl`.
     - `days` must be from 30 to 60.
-    - `expiry` must be from 1h to 14d.
+    - `expiry` must be from 1h to 14d. It is only used in every-close mode.
+    - `mode` is `every-close` (default) or `pattern`. `zone_tf` (30m, 1h or 4h) and `sl_buffer_atr` (0-10, or omit for auto) apply to pattern mode only.
   - Response: the engine's JSON (`market`, `setup`, `params`, `data`, `fees`, `result` with the verdict, plus `trades` and `elapsed_s`).
   - Errors come back as `{"error": "..."}`:
     - 400 for bad input
