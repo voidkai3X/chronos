@@ -12,7 +12,7 @@ ENGINE_DIR = os.path.dirname(HERE)
 sys.path.insert(0, ENGINE_DIR)
 import tester  # noqa: E402  (engine: load_markets, resolve_market, _fetch_chunks)
 
-RUN_TIMEOUT = int(os.environ.get("TESTER_TIMEOUT", "150"))  # seconds per backtest
+RUN_TIMEOUT = int(os.environ.get("TESTER_TIMEOUT", "240"))  # first run of a market may backfill from OKX/Yahoo  # seconds per backtest
 MAX_PARALLEL = int(os.environ.get("TESTER_MAX_PARALLEL", "2"))
 _run_sem = threading.BoundedSemaphore(MAX_PARALLEL)
 _market_locks, _ml_guard = {}, threading.Lock()  # one run per market at a time (shared candle cache file)
@@ -122,9 +122,9 @@ def run_test():
             raise ValueError("for a long, SL must be below entry and TP above entry (sl < entry < tp)")
         if side == "short" and not (tp < entry < sl):
             raise ValueError("for a short, TP must be below entry and SL above entry (tp < entry < sl)")
-        days = int(d.get("days") or 60)
-        if not 30 <= days <= 60:
-            raise ValueError("days must be between 30 and 60")
+        days = int(d.get("days") or 90)
+        if not 30 <= days <= 90:
+            raise ValueError("days must be between 30 and 90")
         expiry = str(d.get("expiry") or "72h").strip().lower()
         try:
             exp_ms = tester.parse_dur(expiry)
@@ -178,7 +178,7 @@ def run_test():
                 try:
                     p = subprocess.run(cmd, cwd=ENGINE_DIR, capture_output=True, text=True, timeout=RUN_TIMEOUT)
                 except subprocess.TimeoutExpired:
-                    return err(f"backtest timed out after {RUN_TIMEOUT}s (MFP data fetch was slow); try again, "
+                    return err(f"backtest timed out after {RUN_TIMEOUT}s (market data fetch was slow); try again, "
                                "the candle cache makes repeat runs fast", 504)
                 if p.returncode != 0 or not os.path.exists(jp):
                     msg = (p.stderr or p.stdout or "engine failed").strip().splitlines()

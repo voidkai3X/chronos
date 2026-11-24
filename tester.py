@@ -103,31 +103,30 @@ async def _fetch_chunks(provider, coin, interval, windows):
     return out
 
 
+LAST_PROVENANCE = {}  # (market_id, interval) -> provenance dict of the last load (sources, ranges, gaps, overlap)
+USE_BACKUPS = True
+
+
 def fetch_candles(m, interval, start_ms, end_ms, refresh=False):
-    """Chunked, cached fetch of final candles [start_ms, end_ms)."""
-    os.makedirs(CACHE_DIR, exist_ok=True)
-    key = f"{m['provider']}_{m['coin'].replace(':', '-')}_{interval}.pkl"
-    path = os.path.join(CACHE_DIR, key)
-    have = {}
-    if not refresh and os.path.exists(path):
-        have = pickle.load(open(path, "rb"))
-    step = STEP[interval]
-    w = CHUNK * step
-    windows, c = [], start_ms
-    first, last = (min(have), max(have)) if have else (None, None)
-    while c < end_ms:
-        e = min(end_ms, c + w)
-        # skip chunks fully inside cached range (keep last 2 bars fresh)
-        if not (have and c >= first and e <= last - step):
-            windows.append((c, e))
-        c = e
-    if windows:
-        have.update(asyncio.run(_fetch_chunks(m["provider"], m["coin"], interval, windows)))
-        tmp = f"{path}.{os.getpid()}.tmp"  # atomic: insights/basket runs may read other markets' caches in parallel
-        with open(tmp, "wb") as fh:
-            pickle.dump(have, fh)
-        os.replace(tmp, path)
-    return [have[k] for k in sorted(have) if start_ms <= k < end_ms]
+    """Final candles [start_ms, end_ms): MFP feed first, older bars backfilled from backup sources (see sources.py)."""
+    import sources
+    bars, prov = sources.load(m, interval, start_ms, end_ms, refresh=refresh, kind=asset_class(m), use_backups=USE_BACKUPS)
+    LAST_PROVENANCE[(m["market_id"], interval)] = prov
+    return bars
+
+
+def data_block(m, a, base, start_ms, end_ms, warm, trades=None):
+    """Window actually tested + provenance. If history is short, testing starts after the warm-up on what exists."""
+    import sources
+    prov = LAST_PROVENANCE.get((m["market_id"], a.interval)) or {}
+    eff = start_ms
+    if base and base[0][0] - (start_ms - warm) > 3 * 86400_000:  # history really is shorter (not just a weekend)
+        eff = max(start_ms, base[0][0] + warm)
+    days_tested = round((end_ms - eff) / 86400_000, 1)
+    days_tested = int(days_tested) if days_tested == int(days_tested) else days_tested
+    return eff, dict(source="see provenance", interval=a.interval, days=days_tested, days_requested=a.days,
+                     bars=len(base), from_ms=eff, to_ms=end_ms, first_bar_ms=base[0][0] if base else None,
+                     provenance=prov, provenance_text=sources.provenance_text(prov, days_tested) if prov else "")
 
 
 def resample(bars, step_ms):
@@ -816,7 +815,7 @@ def replayed_as(g, p, hold=""):
 def text_report(out):
     g, s, m, p = out["setup"], out["result"], out["market"], out["params"]
     hold = f", time stop {p['max_hold']}" if str(p['max_hold']).lower() != "none" else ""
-    head = (f"({out['data']['days']}d of {out['data']['interval']} MFP candles, "
+    head = (f"({out['data']['days']:g}d tested on {out['data']['interval']} candles, "
             f"{fmt_ts(out['data']['from_ms'])} to {fmt_ts(out['data']['to_ms'])})")
     if p.get("mode") == "pattern":
         z = out["zones"]
@@ -838,6 +837,8 @@ def text_report(out):
         L.append(f"Trend filter skipped {out['skipped_by_trend']} eligible closes. Trend now: {out['trend_now']}.")
     if p.get("mode") != "pattern" and abs(g["entry_atr"]) > 3:
         L.append(f"Warning: entry is {abs(g['entry_atr']):.1f} ATR from current price, so most replays will not fill. Check the levels.")
+    if out["data"].get("provenance_text"):
+        L += ["", out["data"]["provenance_text"]]
     L += ["", f"Verdict: {s['verdict']}.",
           f"Fees used: {out['fees']['commission_pct_per_fill']}% per fill + {out['fees']['swap_pct_per_day']}%/day swap ({out['fees']['asset_class']}, MFP standard).",
           "Backtest on past candles only. Not a prediction, not advice."]
@@ -857,6 +858,9 @@ def basket_report(out):
     L += ["", "POOLED (all markets, trades in exit-time order):"] + (
         [f"Zones found in window: {out['zones']['zones_found']}, traded (filled) {out['zones']['zones_traded']}."] if out.get("zones") else [])
     L += result_lines(s, p)
+    L += ["", "Data per market:"]
+    for r in out["per_market"]:
+        L.append(f"  {r['market']['market_id']}: {r['data'].get('provenance_text', '')}")
     L += ["", f"Verdict (pooled): {s['verdict']}.", "Backtest on past candles only. Not a prediction, not advice."]
     return "\n".join(L)
 
@@ -884,7 +888,8 @@ def run_market(m, a, g_user, mode, end_ms, start_ms, warm, expiry, sl_buffer, sl
     """Run one market. g_user is the user's setup; other markets get the same shape in ATR units."""
     base = fetch_candles(m, a.interval, start_ms - warm, end_ms, refresh=a.refresh)
     if len(base) < 200:
-        raise SystemExit(f"not enough MFP history for {m['market_id']} ({len(base)} bars)")
+        raise SystemExit(f"not enough history for {m['market_id']} ({len(base)} bars)")
+    start_ms, data = data_block(m, a, base, start_ms, end_ms, warm)
     step = STEP[a.interval]
     h4 = resample(base, H4)
     h4c = [b for b in h4 if b[5] >= b[0] + H4 - step]
@@ -932,8 +937,7 @@ def run_market(m, a, g_user, mode, end_ms, start_ms, warm, expiry, sl_buffer, sl
         trend_now = "up" if ema[-1] > ema[-6] else "down"
     out = dict(market=dict(market_id=m["market_id"], coin=m["coin"], provider=m["provider"]),
                setup={k: (round(v, 6) if isinstance(v, float) else v) for k, v in g.items()},
-               data=dict(source=WS_URL, interval=a.interval, days=a.days, bars=len(base),
-                         from_ms=trades[0]["placed"] if trades else start_ms, to_ms=end_ms, first_bar_ms=base[0][0]),
+               data=dict(data, first_order_ms=trades[0]["placed"] if trades else None),
                fees=dict(asset_class=cls, commission_pct_per_fill=fee, swap_pct_per_day=swap),
                skipped_by_trend=skipped, trend_now=trend_now, result=s)
     if zstats is not None:
@@ -951,7 +955,8 @@ def main(argv=None):
     ap.add_argument("--mode", choices=["every-close", "pattern"], default="every-close",
                     help="every-close (default): the setup shape at every 4h close when flat. "
                          "pattern: only at fresh supply/demand zones found by rule on --zone-tf candles")
-    ap.add_argument("--days", type=int, default=60)
+    ap.add_argument("--days", type=int, default=90, help="test window in days (default 90; +14d warm-up is loaded before it)")
+    ap.add_argument("--no-backups", action="store_true", help="MFP feed only, no backfill from OKX/Bybit/Yahoo/Dukascopy")
     ap.add_argument("--interval", default="15m", choices=["5m", "15m", "30m", "1h"])
     ap.add_argument("--expiry", default=None, help="cancel unfilled order after (default 72h every-close; pattern: max time a limit rests on one zone, default 30d)")
     ap.add_argument("--max-hold", default="7d", help="time stop after fill, exit at market (default 7d; 'none' to hold until TP/SL)")
@@ -999,9 +1004,11 @@ def main(argv=None):
     end_ms = now - now % step
     warm = 14 * 86400_000  # 4h EMA50 + ATR warm-up (84 4h bars)
     start_ms = end_ms - a.days * 86400_000
+    global USE_BACKUPS
+    USE_BACKUPS = not a.no_backups
     base = fetch_candles(m, a.interval, start_ms - warm, end_ms, refresh=a.refresh)
     if len(base) < 200:
-        raise SystemExit(f"not enough MFP history for {m['market_id']} ({len(base)} bars)")
+        raise SystemExit(f"not enough history for {m['market_id']} ({len(base)} bars)")
     h4c = [b for b in resample(base, H4) if b[5] >= b[0] + H4 - step]
     atr_now = atr_series(h4c)[-1]
     ref = a.ref or base[-1][4]

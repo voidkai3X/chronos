@@ -158,7 +158,7 @@ function render(o) {
   hadResult = true; $("empty").hidden = true; $("skel").hidden = true; $("res").hidden = false;
   $("r-title").textContent = `${g.side.toUpperCase()} ${m.market_id}  ·  entry ${fmt(g.entry)}  TP ${fmt(g.tp)}  SL ${fmt(g.sl)}  ·  1:${g.rr.toFixed(2)}`;
   const pat = p.mode === "pattern";
-  $("r-sub").textContent = `${pat ? "PATTERN mode. " : ""}${o.data.days} days of ${o.data.interval} MFP candles, ${wat(o.data.from_ms)} to ${wat(o.data.to_ms)} WAT. ` +
+  $("r-sub").textContent = `${pat ? "PATTERN mode. " : ""}${o.data.days} days tested on ${o.data.interval} candles, ${wat(o.data.from_ms)} to ${wat(o.data.to_ms)} WAT${o.data.days_requested && o.data.days < o.data.days_requested ? ` (asked for ${o.data.days_requested}; that is all the history that exists)` : ""}. ` +
     (pat ? `Price at test ${fmt(g.ref)}. ` + (p.entry_style && p.entry_style !== "limit"
       ? `Entry style ${p.entry_style}: ${p.placement}. Stop ${p.sl_buffer_atr.toFixed(2)} ATR beyond the move's extreme and the zone, target ${g.rr.toFixed(2)}R. Time stop ${p.max_hold}`
       : `Replayed as a limit at the near edge of each fresh ${g.side === "short" ? "supply" : "demand"} zone on ${p.zone_tf} candles, ` +
@@ -189,9 +189,26 @@ function render(o) {
   ].join("");
   $("meta").textContent = `Fees: ${o.fees.commission_pct_per_fill}% per fill + ${o.fees.swap_pct_per_day}%/day swap (${o.fees.asset_class}, MFP standard). ` +
     `Tie rule: ${p.tie_rule}. Placement: ${p.placement}. Generated ${o.generated.replace("T", " ").replace("Z", " UTC")}` + (o.elapsed_s != null ? `, ran in ${o.elapsed_s}s.` : ".");
+  renderProvenance(o.data);
   renderInsights(o.insights);
   renderTrades(o.trades || []);
   drawChart(o.trades || []);
+}
+function renderProvenance(d) {
+  const el = $("provenance");
+  if (!el) return;
+  const pv = d && d.provenance;
+  if (!pv || !pv.segments) { el.hidden = true; return; }
+  const day = ms => new Date(ms).toISOString().slice(0, 10);
+  const segs = pv.segments.map(s => `${s.label} (${s.source.split(":").slice(1).join(":")}) ${day(s.from_ms)} to ${day(s.to_ms)}`).join(" + ");
+  const chk = (pv.overlap_checks || []).map(c => c.median_abs_pct_diff == null ? `${c.source}: no overlap to check`
+    : `${c.source} vs newer data: ${c.median_abs_pct_diff.toFixed(3)}% median close diff` +
+      (c.status === "basis-adjusted" ? `, adjusted x${c.ratio}` : c.status.startsWith("rejected") ? ", rejected (not used)" : "")).join("; ");
+  const g = pv.gaps || {};
+  el.textContent = `Data: ${segs}. ${d.days} days tested, ${pv.days_covered} days loaded incl. warm-up (UTC dates). ` +
+    `Gaps: ${g.gaps ?? 0}${g.missing_bars ? ` (${g.missing_bars} missing bars)` : ""}${g.weekend_closures ? `, ${g.weekend_closures} weekend closures` : ""}. ` +
+    `Overlap: ${chk || (pv.backfill_needed ? "no backup used" : "not needed, MFP covered the whole window")}.`;
+  el.hidden = false;
 }
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 function renderInsights(ins) {

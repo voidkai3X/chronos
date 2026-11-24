@@ -1,0 +1,16 @@
+Setup test: LONG binance|BTCUSDT  (60d tested on 15m candles, 25 Sep 23:30 WAT to 24 Nov 23:30 WAT)
+Setup: entry 60400 (stop), TP 65500, SL 58700, R:R 1:3.00. Price now 59981.7, 4h ATR 1367.
+Replayed as: entry +0.31 ATR from price, stop 1.24 ATR (2.81%), target 3.73 ATR (8.44%); scaled by atr. New order at each 4h close when flat, expiry 72h, time stop 7d.
+
+Orders 33: filled 29, unfilled 3, still open at end 1.
+Closed 29: TP 3, SL 25, time exits 1.
+Win rate 10% vs break-even 27% (after fees; 25% before).
+Average R -0.62 net (-0.55 gross). Total -18.0R. Per order placed -0.55R.
+Worst losing streak 13. Worst drawdown -22.7R. First half -0.731R, second half -0.516R avg.
+Stop check: 1 of 25 stop-outs (4%) still reached TP within 72h of the fill; 1 of them (4%) only poked 1.0 ATR or less past the stop first.
+
+Data: MFP feed [binance|BTCUSDT] 11 Sep 2026 to 24 Nov 2026. Tested 60 days; 74 days of 15m bars loaded incl. warm-up. Gaps: 0 (0 missing bars). Overlap: n/a, MFP covered the whole window.
+
+Verdict: no edge (expectancy <= 0 after fees).
+Fees used: 0.03% per fill + 0.03%/day swap (crypto, MFP standard).
+Backtest on past candles only. Not a prediction, not advice.

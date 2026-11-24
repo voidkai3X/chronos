@@ -1,0 +1,47 @@
+Setup test (PATTERN mode, limit entry): SHORT veranta|AUDUSD  (90d tested on 15m candles, 26 Aug 23:30 WAT to 24 Nov 23:30 WAT)
+Your setup: entry 0.666288, TP 0.658814, SL 0.668332, R:R 1:3.66. Price now 0.66403.
+Replayed as: a limit at the near edge of each fresh supply zone on 30m candles, SL 2.09 x 30m ATR beyond the far edge (derived from your SL: no detected zone contains your entry; your risk 3.10 ATR minus median zone height 1.01 ATR), TP 3.66R. Checked at every 30m close when flat, expiry 30d, time stop 7d; zone usable until touched 1x, closed through, or 30d old.
+Zones found in window: 33 (touched 25, invalidated 22); zones traded (filled): 19.
+
+Orders 36: filled 19, unfilled 17, still open at end 1.
+Closed 18: TP 5, SL 12, time exits 1.
+Win rate 28% vs break-even 22% (after fees; 22% before).
+Average R +0.33 net (+0.38 gross). Total +6.0R. Per order placed +0.17R.
+Worst losing streak 10. Worst drawdown -10.4R. First half 0.662R, second half -0.001R avg.
+Stop check: 6 of 12 stop-outs (50%) still reached TP within 7d of the fill; 1 of them (8%) only poked 1.0 ATR or less past the stop first.
+
+Data: MFP feed [veranta|AUDUSD] 12 Aug 2026 to 24 Nov 2026. Tested 90 days; 104 days of 15m bars loaded incl. warm-up. Gaps: 0 (0 missing bars), plus 15 weekend closures. Overlap: n/a, MFP covered the whole window.
+
+Verdict: too few samples (18 closed trades, need 20).
+Fees used: 0.0025% per fill + 0.005%/day swap (forex, MFP standard).
+Backtest on past candles only. Not a prediction, not advice.
+
+INSIGHTS (rule-based, from this test's own numbers)
+  ! Only 18 closed trades, below the 20 needed to judge anything. Any win rate here can be luck. [past 90d, AUDUSD, 18 closed trades]
+  ! 6 of 12 stop-outs (50%) later reached the target within 7d; the median of those needed 3.62 x 30m ATR more room (1 went 1 ATR or less past the stop). Your stops are getting swept before the move. [past 90d, AUDUSD, 18 closed trades]
+  ! It got weaker over time: +0.66R per trade in the first half vs -0.00R in the second. Conditions may have changed. [past 90d, AUDUSD, 18 closed trades]
+  - Worst losing streak was 10 in a row (worst drawdown -10.4R). At 1:3.7 long streaks are normal; size so you can survive them. [past 90d, AUDUSD, 18 closed trades]
+  - R:R tested: 1:3.66. Every variant below keeps this R:R; only the entry and stop change.
+
+WHAT-IF COMPARISON: 8 variant runs on the same 90-day window (pattern mode, 30m zones, same R:R 1:3.66, fees included). Picking the best of several variants overstates its edge (multiple comparisons).
+  variant                      scope            SLbuf closed  TP  SL time  win   BE   avgR   totR     t  evidence
+  limit (blind, first retest)  AUDUSD            2.09     18   5  12    1  28%  22%  +0.33   +6.0   0.7  too few (<20)
+  limit, SL +0.5 ATR wider     AUDUSD            2.59     17   6   9    2  35%  22%  +0.73  +12.4   1.4  too few (<20)
+  sweep entry                  AUDUSD            2.09      9   2   7    0  22%  22%  -0.01   -0.1   n/a  too few (<20)
+  confirm entry                AUDUSD            2.09      7   2   4    1  29%  22%  +0.67   +4.7   n/a  too few (<20)
+  limit (blind, first retest)  6-market basket   2.09    117  22  85   10  19%  23%  -0.06   -6.8  -0.3  below BE / no edge
+  limit, SL +0.5 ATR wider     6-market basket   2.59    112  21  78   13  19%  23%  +0.02   +2.5   0.1  below BE / no edge
+  sweep entry                  6-market basket   2.09     40   7  31    2  18%  23%  -0.21   -8.5  -0.8  below BE / no edge
+  confirm entry                6-market basket   2.09     55   9  38    8  16%  23%  +0.01   +0.7   0.1  below BE / no edge
+
+Evidence is insufficient: none of the 8 variant runs had at least 20 closed trades and a result above break-even on this window. Don't read the comparison as a fix; it only shows how each entry style behaved here.
+
+SUGGESTED FIXES
+  * Get more samples: run it across a basket (e.g. all FX pairs) or a longer window before trusting a number.
+  * Wait for the sweep (let price run the stops beyond the zone, then enter on the close back inside), or place the SL beyond that liquidity instead of just past the zone.
+      tested: sweep entry on AUDUSD: 9 closed, win 22% vs break-even 22%, -0.01R per trade (not enough evidence) [past 90d, AUDUSD, 9 closed trades]
+      tested: sweep entry on 6-market basket: 40 closed, win 18% vs break-even 23%, -0.21R per trade (below break-even or no edge) [past 90d, 6-market basket, 40 closed trades]
+      tested: limit, SL +0.5 ATR wider on AUDUSD: 17 closed, win 35% vs break-even 22%, +0.73R per trade (not enough evidence) [past 90d, AUDUSD, 17 closed trades]
+      tested: limit, SL +0.5 ATR wider on 6-market basket: 112 closed, win 19% vs break-even 23%, +0.02R per trade (below break-even or no edge) [past 90d, 6-market basket, 112 closed trades]
+
+These notes come from past candles in the tested window only. They describe what happened, not what will happen. Small samples and trying several variants both make results look better than they are. Not financial advice.

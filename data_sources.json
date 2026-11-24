@@ -1,0 +1,3692 @@
+{
+ "generated_utc": "2026-11-24T22:39:43Z",
+ "interval": "15m",
+ "requested_days": 104,
+ "note": "90 test days + 14 warm-up days requested",
+ "markets": [
+  {
+   "market_id": "hyperliquid|xyz:AAPL",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "AAPL-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "AAPLUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "okx:AAPL-USDT-SWAP",
+     "bars": 4967,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-10-03 16:15"
+    },
+    {
+     "source": "mfp:hyperliquid|xyz:AAPL",
+     "bars": 5017,
+     "from_utc": "2026-10-03 16:15",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [
+    {
+     "source": "okx:AAPL-USDT-SWAP",
+     "splice_at": 1791044100000,
+     "overlap_bars": 672,
+     "median_abs_pct_diff": 0.0871,
+     "status": "ok",
+     "bars_added": 4967
+    }
+   ],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": [],
+   "qa_last_14d": {
+    "window_utc": [
+     "2026-11-10",
+     "2026-11-24"
+    ],
+    "checks": [
+     {
+      "source": "okx:AAPL-USDT-SWAP",
+      "common_bars": 1344,
+      "backup_bars": 1344,
+      "mfp_bars": 1344,
+      "median_abs_pct_diff": 0.1229,
+      "median_ratio_mfp_over_backup": 0.998772
+     },
+     {
+      "source": "bybit:AAPLUSDT",
+      "common_bars": 1344,
+      "backup_bars": 1344,
+      "mfp_bars": 1344,
+      "median_abs_pct_diff": 0.1012,
+      "median_ratio_mfp_over_backup": 0.998989
+     }
+    ]
+   }
+  },
+  {
+   "market_id": "binance|AAVEUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "AAVE-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "AAVEUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|AAVEUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|ADAUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "ADA-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "ADAUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|ADAUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|AMDUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "AMD-USDT-SWAP"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|AMDUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "hyperliquid|xyz:AMZN",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "AMZN-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "AMZNUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "okx:AMZN-USDT-SWAP",
+     "bars": 4968,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-10-03 16:30"
+    },
+    {
+     "source": "mfp:hyperliquid|xyz:AMZN",
+     "bars": 5015,
+     "from_utc": "2026-10-03 16:30",
+     "to_utc": "2026-11-24 22:15"
+    }
+   ],
+   "overlap_checks": [
+    {
+     "source": "okx:AMZN-USDT-SWAP",
+     "splice_at": 1791045000000,
+     "overlap_bars": 672,
+     "median_abs_pct_diff": 0.0714,
+     "status": "ok",
+     "bars_added": 4968
+    }
+   ],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": [],
+   "qa_last_14d": {
+    "window_utc": [
+     "2026-11-10",
+     "2026-11-24"
+    ],
+    "checks": [
+     {
+      "source": "okx:AMZN-USDT-SWAP",
+      "common_bars": 1344,
+      "backup_bars": 1344,
+      "mfp_bars": 1344,
+      "median_abs_pct_diff": 0.1507,
+      "median_ratio_mfp_over_backup": 0.998495
+     },
+     {
+      "source": "bybit:AMZNUSDT",
+      "common_bars": 1344,
+      "backup_bars": 1344,
+      "mfp_bars": 1344,
+      "median_abs_pct_diff": 0.1337,
+      "median_ratio_mfp_over_backup": 0.998664
+     }
+    ]
+   }
+  },
+  {
+   "market_id": "binance|AVAXUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "AVAX-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "AVAXUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|AVAXUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|AVGOUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "AVGO-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "AVGOUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|AVGOUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|BABAUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "bybit",
+     "symbol": "BABAUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|BABAUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "hyperliquid|xyz:BRENTOIL",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "yahoo",
+     "symbol": "BZ=F"
+    },
+    {
+     "source": "dukascopy",
+     "symbol": "BRENTCMDUSD"
+    }
+   ],
+   "days_covered": 52.2,
+   "first_bar": "2026-10-03 18:00",
+   "segments": [
+    {
+     "source": "mfp:hyperliquid|xyz:BRENTOIL",
+     "bars": 5010,
+     "from_utc": "2026-10-03 18:00",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [
+    {
+     "source": "yahoo:BZ=F",
+     "splice_at": 1791050400000,
+     "overlap_bars": 459,
+     "median_abs_pct_diff": 0.3743,
+     "status": "rejected: overlap mismatch",
+     "ratio": 0.996271,
+     "median_abs_pct_diff_after": 0.3136
+    }
+   ],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": [
+    "dukascopy:BRENTCMDUSD: https://datafeed.dukascopy.com/datafeed/BRENTCMDUSD/2026/07/17/BID_candles_min_1.bi5: HTTP Error 503: Service Unavailable"
+   ],
+   "qa_last_14d": {
+    "window_utc": [
+     "2026-11-10",
+     "2026-11-24"
+    ],
+    "checks": [
+     {
+      "source": "yahoo:BZ=F",
+      "common_bars": 912,
+      "backup_bars": 912,
+      "mfp_bars": 1344,
+      "median_abs_pct_diff": 1.6394,
+      "median_ratio_mfp_over_backup": 0.98387
+     },
+     {
+      "source": "dukascopy:BRENTCMDUSD",
+      "skipped": "slow source; checked only when it is used for backfill"
+     }
+    ]
+   }
+  },
+  {
+   "market_id": "binance|BTCUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "BTC-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "BTCUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|BTCUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": [],
+   "qa_last_14d": {
+    "window_utc": [
+     "2026-11-10",
+     "2026-11-24"
+    ],
+    "checks": [
+     {
+      "source": "okx:BTC-USDT-SWAP",
+      "common_bars": 1344,
+      "backup_bars": 1344,
+      "mfp_bars": 1344,
+      "median_abs_pct_diff": 0.0051,
+      "median_ratio_mfp_over_backup": 1.000022
+     },
+     {
+      "source": "bybit:BTCUSDT",
+      "common_bars": 1344,
+      "backup_bars": 1344,
+      "mfp_bars": 1344,
+      "median_abs_pct_diff": 0.0049,
+      "median_ratio_mfp_over_backup": 1.000015
+     }
+    ]
+   }
+  },
+  {
+   "market_id": "binance|CLUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "CL-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "CLUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|CLUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|COINUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "COIN-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "COINUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|COINUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|CRCLUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "CRCL-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "CRCLUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|CRCLUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|CRWVUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "CRWV-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "CRWVUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|CRWVUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|DOGEUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "DOGE-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "DOGEUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|DOGEUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|ENAUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "ENA-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "ENAUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|ENAUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|ETHUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "ETH-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "ETHUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|ETHUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": [],
+   "qa_last_14d": {
+    "window_utc": [
+     "2026-11-10",
+     "2026-11-24"
+    ],
+    "checks": [
+     {
+      "source": "okx:ETH-USDT-SWAP",
+      "common_bars": 1344,
+      "backup_bars": 1344,
+      "mfp_bars": 1344,
+      "median_abs_pct_diff": 0.0055,
+      "median_ratio_mfp_over_backup": 1.000036
+     },
+     {
+      "source": "bybit:ETHUSDT",
+      "common_bars": 1344,
+      "backup_bars": 1344,
+      "mfp_bars": 1344,
+      "median_abs_pct_diff": 0.005,
+      "median_ratio_mfp_over_backup": 1.000029
+     }
+    ]
+   }
+  },
+  {
+   "market_id": "veranta|EURUSD",
+   "asset_class": "forex",
+   "backups": [
+    {
+     "source": "bybit",
+     "symbol": "EURUSDUSDT"
+    },
+    {
+     "source": "yahoo",
+     "symbol": "EURUSD=X"
+    },
+    {
+     "source": "dukascopy",
+     "symbol": "EURUSD"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:veranta|EURUSD",
+     "bars": 7100,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 15,
+   "errors": [],
+   "qa_last_14d": {
+    "window_utc": [
+     "2026-11-10",
+     "2026-11-24"
+    ],
+    "checks": [
+     {
+      "source": "bybit:EURUSDUSDT",
+      "common_bars": 960,
+      "backup_bars": 1344,
+      "mfp_bars": 960,
+      "median_abs_pct_diff": 0.0924,
+      "median_ratio_mfp_over_backup": 0.999077
+     },
+     {
+      "source": "yahoo:EURUSD=X",
+      "common_bars": 944,
+      "backup_bars": 948,
+      "mfp_bars": 960,
+      "median_abs_pct_diff": 0.0278,
+      "median_ratio_mfp_over_backup": 0.999722
+     },
+     {
+      "source": "dukascopy:EURUSD",
+      "skipped": "slow source; checked only when it is used for backfill"
+     }
+    ]
+   }
+  },
+  {
+   "market_id": "binance|FARTCOINUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "FARTCOIN-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "FARTCOINUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|FARTCOINUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|GOOGLUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "GOOGL-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "GOOGLUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|GOOGLUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|HOODUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "HOOD-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "HOODUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|HOODUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|HYPEUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "HYPE-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "HYPEUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|HYPEUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|INTCUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "INTC-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "INTCUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|INTCUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "hyperliquid|xyz:JP225",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "JP225-USDT-SWAP"
+    },
+    {
+     "source": "yahoo",
+     "symbol": "NIY=F"
+    },
+    {
+     "source": "dukascopy",
+     "symbol": "JPNIDXJPY"
+    }
+   ],
+   "days_covered": 76.8,
+   "first_bar": "2026-09-09 04:00",
+   "segments": [
+    {
+     "source": "okx:JP225-USDT-SWAP",
+     "bars": 2280,
+     "from_utc": "2026-09-09 04:00",
+     "to_utc": "2026-10-02 22:00"
+    },
+    {
+     "source": "mfp:hyperliquid|xyz:JP225",
+     "bars": 5089,
+     "from_utc": "2026-10-02 22:00",
+     "to_utc": "2026-11-24 22:15"
+    }
+   ],
+   "overlap_checks": [
+    {
+     "source": "okx:JP225-USDT-SWAP",
+     "splice_at": 1790978400000,
+     "overlap_bars": 672,
+     "median_abs_pct_diff": 0.0903,
+     "status": "ok",
+     "bars_added": 2280
+    },
+    {
+     "source": "yahoo:NIY=F",
+     "splice_at": 1788926400000,
+     "status": "nothing older to add (source history too short)",
+     "overlap_bars": 0,
+     "bars_added": 0
+    }
+   ],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": [
+    "dukascopy:JPNIDXJPY: https://datafeed.dukascopy.com/datafeed/JPNIDXJPY/2026/07/12/BID_candles_min_1.bi5: HTTP Error 503: Service Unavailable"
+   ],
+   "qa_last_14d": {
+    "window_utc": [
+     "2026-11-10",
+     "2026-11-24"
+    ],
+    "checks": [
+     {
+      "source": "okx:JP225-USDT-SWAP",
+      "common_bars": 1344,
+      "backup_bars": 1344,
+      "mfp_bars": 1344,
+      "median_abs_pct_diff": 0.1521,
+      "median_ratio_mfp_over_backup": 0.998999
+     },
+     {
+      "source": "yahoo:NIY=F",
+      "common_bars": 920,
+      "backup_bars": 920,
+      "mfp_bars": 1344,
+      "median_abs_pct_diff": 0.0969,
+      "median_ratio_mfp_over_backup": 0.999088
+     },
+     {
+      "source": "dukascopy:JPNIDXJPY",
+      "skipped": "slow source; checked only when it is used for backfill"
+     }
+    ]
+   }
+  },
+  {
+   "market_id": "veranta|USDJPY",
+   "asset_class": "forex",
+   "backups": [
+    {
+     "source": "bybit",
+     "symbol": "USDJPYUSDT"
+    },
+    {
+     "source": "yahoo",
+     "symbol": "USDJPY=X"
+    },
+    {
+     "source": "dukascopy",
+     "symbol": "USDJPY"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:veranta|USDJPY",
+     "bars": 7100,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 15,
+   "errors": [],
+   "qa_last_14d": {
+    "window_utc": [
+     "2026-11-10",
+     "2026-11-24"
+    ],
+    "checks": [
+     {
+      "source": "bybit:USDJPYUSDT",
+      "common_bars": 960,
+      "backup_bars": 1344,
+      "mfp_bars": 960,
+      "median_abs_pct_diff": 0.1249,
+      "median_ratio_mfp_over_backup": 1.001251
+     },
+     {
+      "source": "yahoo:USDJPY=X",
+      "common_bars": 944,
+      "backup_bars": 944,
+      "mfp_bars": 960,
+      "median_abs_pct_diff": 0.0038,
+      "median_ratio_mfp_over_backup": 1.000038
+     },
+     {
+      "source": "dukascopy:USDJPY",
+      "skipped": "slow source; checked only when it is used for backfill"
+     }
+    ]
+   }
+  },
+  {
+   "market_id": "binance|LINKUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "LINK-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "LINKUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|LINKUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|LITUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "LIT-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "LITUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|LITUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|METAUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "META-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "METAUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|METAUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|MRVLUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "MRVL-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "MRVLUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|MRVLUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "hyperliquid|xyz:MSFT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "MSFT-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "MSFTUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "okx:MSFT-USDT-SWAP",
+     "bars": 4968,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-10-03 16:30"
+    },
+    {
+     "source": "mfp:hyperliquid|xyz:MSFT",
+     "bars": 5016,
+     "from_utc": "2026-10-03 16:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [
+    {
+     "source": "okx:MSFT-USDT-SWAP",
+     "splice_at": 1791045000000,
+     "overlap_bars": 672,
+     "median_abs_pct_diff": 0.0843,
+     "status": "ok",
+     "bars_added": 4968
+    }
+   ],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": [],
+   "qa_last_14d": {
+    "window_utc": [
+     "2026-11-10",
+     "2026-11-24"
+    ],
+    "checks": [
+     {
+      "source": "okx:MSFT-USDT-SWAP",
+      "common_bars": 1344,
+      "backup_bars": 1344,
+      "mfp_bars": 1344,
+      "median_abs_pct_diff": 0.1442,
+      "median_ratio_mfp_over_backup": 0.99856
+     },
+     {
+      "source": "bybit:MSFTUSDT",
+      "common_bars": 1344,
+      "backup_bars": 1344,
+      "mfp_bars": 1344,
+      "median_abs_pct_diff": 0.127,
+      "median_ratio_mfp_over_backup": 0.998731
+     }
+    ]
+   }
+  },
+  {
+   "market_id": "binance|MUUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "MU-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "MUUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|MUUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|NATGASUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "yahoo",
+     "symbol": "NG=F"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|NATGASUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|NBISUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "NBIS-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "NBISUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|NBISUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|NEARUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "NEAR-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "NEARUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|NEARUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|NVDAUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "NVDA-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "NVDAUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|NVDAUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|ONDOUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "ONDO-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "ONDOUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|ONDOUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|ORCLUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "ORCL-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "ORCLUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|ORCLUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|PLTRUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "PLTR-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "PLTRUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|PLTRUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|PUMPUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "PUMP-USDT-SWAP"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|PUMPUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|SNDKUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "SNDK-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "SNDKUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|SNDKUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|SOLUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "SOL-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "SOLUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|SOLUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "hyperliquid|xyz:SP500",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "yahoo",
+     "symbol": "ES=F"
+    },
+    {
+     "source": "dukascopy",
+     "symbol": "USA500IDXUSD"
+    }
+   ],
+   "days_covered": 58.0,
+   "first_bar": "2026-09-27 22:00",
+   "segments": [
+    {
+     "source": "yahoo:ES=F",
+     "bars": 462,
+     "from_utc": "2026-09-27 22:00",
+     "to_utc": "2026-10-02 21:15"
+    },
+    {
+     "source": "mfp:hyperliquid|xyz:SP500",
+     "bars": 5010,
+     "from_utc": "2026-10-03 18:00",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [
+    {
+     "source": "yahoo:ES=F",
+     "splice_at": 1791050400000,
+     "overlap_bars": 460,
+     "median_abs_pct_diff": 0.6953,
+     "status": "basis-adjusted",
+     "ratio": 0.993095,
+     "median_abs_pct_diff_after": 0.0122,
+     "bars_added": 462
+    }
+   ],
+   "gaps": 4,
+   "missing_bars": 15,
+   "weekend_closures": 1,
+   "errors": [
+    "dukascopy:USA500IDXUSD: Dukascopy USA500IDXUSD: time budget 90s used after 4/54 days (finished days are cached; run again to continue)"
+   ],
+   "qa_last_14d": {
+    "window_utc": [
+     "2026-11-10",
+     "2026-11-24"
+    ],
+    "checks": [
+     {
+      "source": "yahoo:ES=F",
+      "common_bars": 920,
+      "backup_bars": 920,
+      "mfp_bars": 1344,
+      "median_abs_pct_diff": 0.2656,
+      "median_ratio_mfp_over_backup": 0.997361
+     },
+     {
+      "source": "dukascopy:USA500IDXUSD",
+      "skipped": "slow source; checked only when it is used for backfill"
+     }
+    ]
+   }
+  },
+  {
+   "market_id": "binance|SPCXUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "SPCX-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "SPCXUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|SPCXUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|SUIUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "SUI-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "SUIUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|SUIUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|TAOUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "TAO-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "TAOUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|TAOUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|TSLAUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "TSLA-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "TSLAUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|TSLAUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|TSMUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "TSM-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "TSMUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|TSMUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|UNIUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "UNI-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "UNIUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|UNIUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|WLDUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "WLD-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "WLDUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|WLDUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|XMRUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "bybit",
+     "symbol": "XMRUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|XMRUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|XPLUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "XPL-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "XPLUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|XPLUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|XRPUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "XRP-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "XRPUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|XRPUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "hyperliquid|xyz:XYZ100",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "yahoo",
+     "symbol": "NQ=F"
+    },
+    {
+     "source": "dukascopy",
+     "symbol": "USATECHIDXUSD"
+    }
+   ],
+   "days_covered": 58.0,
+   "first_bar": "2026-09-27 22:00",
+   "segments": [
+    {
+     "source": "yahoo:NQ=F",
+     "bars": 460,
+     "from_utc": "2026-09-27 22:00",
+     "to_utc": "2026-10-02 21:00"
+    },
+    {
+     "source": "mfp:hyperliquid|xyz:XYZ100",
+     "bars": 5002,
+     "from_utc": "2026-10-03 20:00",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [
+    {
+     "source": "yahoo:NQ=F",
+     "splice_at": 1791057600000,
+     "overlap_bars": 461,
+     "median_abs_pct_diff": 0.7964,
+     "status": "basis-adjusted",
+     "ratio": 0.992099,
+     "median_abs_pct_diff_after": 0.0222,
+     "bars_added": 460
+    }
+   ],
+   "gaps": 4,
+   "missing_bars": 16,
+   "weekend_closures": 1,
+   "errors": [
+    "dukascopy:USATECHIDXUSD: https://datafeed.dukascopy.com/datafeed/USATECHIDXUSD/2026/07/14/BID_candles_min_1.bi5: HTTP Error 503: Service Unavailable"
+   ],
+   "qa_last_14d": {
+    "window_utc": [
+     "2026-11-10",
+     "2026-11-24"
+    ],
+    "checks": [
+     {
+      "source": "yahoo:NQ=F",
+      "common_bars": 920,
+      "backup_bars": 920,
+      "mfp_bars": 1344,
+      "median_abs_pct_diff": 0.3253,
+      "median_ratio_mfp_over_backup": 0.996761
+     },
+     {
+      "source": "dukascopy:USATECHIDXUSD",
+      "skipped": "slow source; checked only when it is used for backfill"
+     }
+    ]
+   }
+  },
+  {
+   "market_id": "binance|ZECUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "ZEC-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "ZECUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|ZECUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|1000BONKUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "BONK-USDT-SWAP",
+     "multiplier": 1000.0
+    },
+    {
+     "source": "bybit",
+     "symbol": "1000BONKUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|1000BONKUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|1000PEPEUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "PEPE-USDT-SWAP",
+     "multiplier": 1000.0
+    },
+    {
+     "source": "bybit",
+     "symbol": "1000PEPEUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|1000PEPEUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|AEROUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "AERO-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "AEROUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|AEROUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|APTUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "APT-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "APTUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|APTUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|ARBUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "ARB-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "ARBUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|ARBUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|ASTERUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "ASTER-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "ASTERUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|ASTERUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|ATOMUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "ATOM-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "ATOMUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|ATOMUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|BCHUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "BCH-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "BCHUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|BCHUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|BNBUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "BNB-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "BNBUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|BNBUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|CRVUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "CRV-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "CRVUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|CRVUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|DOTUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "DOT-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "DOTUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|DOTUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|ETHFIUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "ETHFI-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "ETHFIUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|ETHFIUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|FILUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "FIL-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "FILUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|FILUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|HBARUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "HBAR-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "HBARUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|HBARUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|ICPUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "ICP-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "ICPUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|ICPUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|INJUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "INJ-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "INJUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|INJUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|JUPUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "JUP-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "JUPUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|JUPUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|LDOUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "LDO-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "LDOUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|LDOUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|LTCUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "LTC-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "LTCUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|LTCUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|OPUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "OP-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "OPUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|OPUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|PENGUUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "PENGU-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "PENGUUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|PENGUUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|POLUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "POL-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "POLUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|POLUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|SEIUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "SEI-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "SEIUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|SEIUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|TRUMPUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "TRUMP-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "TRUMPUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|TRUMPUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|TRXUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "TRX-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "TRXUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|TRXUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|WIFUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "WIF-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "WIFUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|WIFUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|WLFIUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "WLFI-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "WLFIUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|WLFIUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|XLMUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "XLM-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "XLMUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|XLMUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|1000SHIBUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "SHIB-USDT-SWAP",
+     "multiplier": 1000.0
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|1000SHIBUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|BMNRUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "BMNR-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "BMNRUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|BMNRUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|COPPERUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "XCU-USDT-SWAP"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|COPPERUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|DASHUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "DASH-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "DASHUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|DASHUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|DRAMUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "DRAM-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "DRAMUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|DRAMUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|ETCUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "ETC-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "ETCUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|ETCUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|FETUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "FET-USDT-SWAP"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|FETUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|GRASSUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "GRASS-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "GRASSUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|GRASSUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|JTOUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "JTO-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "JTOUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|JTOUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|MONUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "MON-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "MONUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|MONUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|MSTRUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "MSTR-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "MSTRUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|MSTRUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|PENDLEUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "PENDLE-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "PENDLEUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|PENDLEUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|PYTHUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "PYTH-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "PYTHUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|PYTHUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|QQQUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "QQQ-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "QQQUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|QQQUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|RENDERUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "RENDER-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "RENDERUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|RENDERUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|SAMSUNGUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "SAMSUNG-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "SAMSUNGUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|SAMSUNGUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|SKHYNIXUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "SKHYNIX-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "SKHYNIXUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|SKHYNIXUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|VVVUSDT",
+   "asset_class": "crypto",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "VVV-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "VVVUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|VVVUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|WDCUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "WDC-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "WDCUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|WDCUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|XAGUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "XAG-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "XAGUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|XAGUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|XAUUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "XAU-USDT-SWAP"
+    },
+    {
+     "source": "bybit",
+     "symbol": "XAUUSDT"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|XAUUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": [],
+   "qa_last_14d": {
+    "window_utc": [
+     "2026-11-10",
+     "2026-11-24"
+    ],
+    "checks": [
+     {
+      "source": "okx:XAU-USDT-SWAP",
+      "common_bars": 1344,
+      "backup_bars": 1344,
+      "mfp_bars": 1344,
+      "median_abs_pct_diff": 0.0098,
+      "median_ratio_mfp_over_backup": 0.999937
+     },
+     {
+      "source": "bybit:XAUUSDT",
+      "common_bars": 1344,
+      "backup_bars": 1344,
+      "mfp_bars": 1344,
+      "median_abs_pct_diff": 0.0099,
+      "median_ratio_mfp_over_backup": 0.999915
+     }
+    ]
+   }
+  },
+  {
+   "market_id": "binance|XPDUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "XPD-USDT-SWAP"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|XPDUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "binance|XPTUSDT",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "okx",
+     "symbol": "XPT-USDT-SWAP"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:binance|XPTUSDT",
+     "bars": 9984,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 0,
+   "errors": []
+  },
+  {
+   "market_id": "ostium|DJI",
+   "asset_class": "tradfi",
+   "backups": [
+    {
+     "source": "yahoo",
+     "symbol": "YM=F"
+    },
+    {
+     "source": "dukascopy",
+     "symbol": "USA30IDXUSD"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:ostium|DJI",
+     "bars": 6790,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:00"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 58,
+   "missing_bars": 248,
+   "weekend_closures": 15,
+   "errors": [],
+   "qa_last_14d": {
+    "window_utc": [
+     "2026-11-10",
+     "2026-11-24"
+    ],
+    "checks": [
+     {
+      "source": "yahoo:YM=F",
+      "common_bars": 920,
+      "backup_bars": 920,
+      "mfp_bars": 920,
+      "median_abs_pct_diff": 0.1057,
+      "median_ratio_mfp_over_backup": 0.998945
+     },
+     {
+      "source": "dukascopy:USA30IDXUSD",
+      "skipped": "slow source; checked only when it is used for backfill"
+     }
+    ]
+   }
+  },
+  {
+   "market_id": "veranta|AUDUSD",
+   "asset_class": "forex",
+   "backups": [
+    {
+     "source": "yahoo",
+     "symbol": "AUDUSD=X"
+    },
+    {
+     "source": "dukascopy",
+     "symbol": "AUDUSD"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:veranta|AUDUSD",
+     "bars": 7100,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 15,
+   "errors": [],
+   "qa_last_14d": {
+    "window_utc": [
+     "2026-11-10",
+     "2026-11-24"
+    ],
+    "checks": [
+     {
+      "source": "yahoo:AUDUSD=X",
+      "common_bars": 944,
+      "backup_bars": 948,
+      "mfp_bars": 960,
+      "median_abs_pct_diff": 0.0342,
+      "median_ratio_mfp_over_backup": 0.999658
+     },
+     {
+      "source": "dukascopy:AUDUSD",
+      "skipped": "slow source; checked only when it is used for backfill"
+     }
+    ]
+   }
+  },
+  {
+   "market_id": "veranta|GBPUSD",
+   "asset_class": "forex",
+   "backups": [
+    {
+     "source": "bybit",
+     "symbol": "GBPUSDUSDT"
+    },
+    {
+     "source": "yahoo",
+     "symbol": "GBPUSD=X"
+    },
+    {
+     "source": "dukascopy",
+     "symbol": "GBPUSD"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:veranta|GBPUSD",
+     "bars": 7100,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 15,
+   "errors": [],
+   "qa_last_14d": {
+    "window_utc": [
+     "2026-11-10",
+     "2026-11-24"
+    ],
+    "checks": [
+     {
+      "source": "bybit:GBPUSDUSDT",
+      "common_bars": 960,
+      "backup_bars": 1344,
+      "mfp_bars": 960,
+      "median_abs_pct_diff": 0.1189,
+      "median_ratio_mfp_over_backup": 0.998813
+     },
+     {
+      "source": "yahoo:GBPUSD=X",
+      "common_bars": 944,
+      "backup_bars": 948,
+      "mfp_bars": 960,
+      "median_abs_pct_diff": 0.0038,
+      "median_ratio_mfp_over_backup": 0.999967
+     },
+     {
+      "source": "dukascopy:GBPUSD",
+      "skipped": "slow source; checked only when it is used for backfill"
+     }
+    ]
+   }
+  },
+  {
+   "market_id": "veranta|USDCAD",
+   "asset_class": "forex",
+   "backups": [
+    {
+     "source": "yahoo",
+     "symbol": "USDCAD=X"
+    },
+    {
+     "source": "dukascopy",
+     "symbol": "USDCAD"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:veranta|USDCAD",
+     "bars": 7100,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 15,
+   "errors": [],
+   "qa_last_14d": {
+    "window_utc": [
+     "2026-11-10",
+     "2026-11-24"
+    ],
+    "checks": [
+     {
+      "source": "yahoo:USDCAD=X",
+      "common_bars": 944,
+      "backup_bars": 949,
+      "mfp_bars": 960,
+      "median_abs_pct_diff": 0.0035,
+      "median_ratio_mfp_over_backup": 1.000035
+     },
+     {
+      "source": "dukascopy:USDCAD",
+      "skipped": "slow source; checked only when it is used for backfill"
+     }
+    ]
+   }
+  },
+  {
+   "market_id": "veranta|USDCHF",
+   "asset_class": "forex",
+   "backups": [
+    {
+     "source": "yahoo",
+     "symbol": "USDCHF=X"
+    },
+    {
+     "source": "dukascopy",
+     "symbol": "USDCHF"
+    }
+   ],
+   "days_covered": 104.0,
+   "first_bar": "2026-08-12 22:30",
+   "segments": [
+    {
+     "source": "mfp:veranta|USDCHF",
+     "bars": 7100,
+     "from_utc": "2026-08-12 22:30",
+     "to_utc": "2026-11-24 22:30"
+    }
+   ],
+   "overlap_checks": [],
+   "gaps": 0,
+   "missing_bars": 0,
+   "weekend_closures": 15,
+   "errors": [],
+   "qa_last_14d": {
+    "window_utc": [
+     "2026-11-10",
+     "2026-11-24"
+    ],
+    "checks": [
+     {
+      "source": "yahoo:USDCHF=X",
+      "common_bars": 944,
+      "backup_bars": 946,
+      "mfp_bars": 960,
+      "median_abs_pct_diff": 0.0036,
+      "median_ratio_mfp_over_backup": 1.000036
+     },
+     {
+      "source": "dukascopy:USDCHF",
+      "skipped": "slow source; checked only when it is used for backfill"
+     }
+    ]
+   }
+  }
+ ]
+}

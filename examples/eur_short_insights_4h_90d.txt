@@ -1,0 +1,41 @@
+Setup test (PATTERN mode, limit entry): SHORT veranta|EURUSD  (90d tested on 15m candles, 26 Aug 23:30 WAT to 24 Nov 23:30 WAT)
+Your setup: entry 1.11993, TP 1.08353, SL 1.12886, R:R 1:4.08. Price now 1.09639.
+Replayed as: a limit at the near edge of each fresh supply zone on 4h candles, SL 3.00 x 4h ATR beyond the far edge (derived from your SL: your SL is 3.00 ATR past the far edge of the detected zone your entry sits in), TP 4.08R. Checked at every 4h close when flat, expiry 30d, time stop 7d; zone usable until touched 1x, closed through, or 30d old.
+Zones found in window: 9 (touched 6, invalidated 3); zones traded (filled): 4.
+
+Orders 9: filled 4, unfilled 5, still open at end 0.
+Closed 4: TP 0, SL 0, time exits 4.
+Win rate 0% vs break-even 20% (after fees; 20% before).
+Average R +0.13 net (+0.18 gross). Total +0.5R. Per order placed +0.06R.
+Worst losing streak 1. Worst drawdown -0.5R. First half 0.237R, second half 0.026R avg.
+Stop check: 0 of 0 stop-outs (n/a) still reached TP within 7d of the fill; 0 of them (n/a) only poked 1.0 ATR or less past the stop first.
+
+Data: MFP feed [veranta|EURUSD] 12 Aug 2026 to 24 Nov 2026. Tested 90 days; 104 days of 15m bars loaded incl. warm-up. Gaps: 0 (0 missing bars), plus 15 weekend closures. Overlap: n/a, MFP covered the whole window.
+
+Verdict: too few samples (4 closed trades, need 20).
+Fees used: 0.0025% per fill + 0.005%/day swap (forex, MFP standard).
+Backtest on past candles only. Not a prediction, not advice.
+
+INSIGHTS (rule-based, from this test's own numbers)
+  ! Only 4 closed trades, below the 20 needed to judge anything. Any win rate here can be luck. [past 90d, EURUSD, 4 closed trades]
+  ! 4 of 4 trades (100%) ended on the 7d time limit, not at TP or SL. The target is far for the time window (14.1 x 4h ATR away) or the stop is so wide the trade barely moves in R. [past 90d, EURUSD, 4 closed trades]
+  - R:R tested: 1:4.08. Every variant below keeps this R:R; only the entry and stop change.
+
+WHAT-IF COMPARISON: 8 variant runs on the same 90-day window (pattern mode, 4h zones, same R:R 1:4.08, fees included). Picking the best of several variants overstates its edge (multiple comparisons).
+  variant                      scope            SLbuf closed  TP  SL time  win   BE   avgR   totR     t  evidence
+  limit (blind, first retest)  EURUSD            3.00      4   0   0    4   0%  20%  +0.13   +0.5   n/a  too few (<20)
+  limit, SL +0.5 ATR wider     EURUSD            3.50      4   0   0    4   0%  20%  +0.12   +0.5   n/a  too few (<20)
+  sweep entry                  EURUSD            3.00      1   0   0    1   0%  20%  -0.28   -0.3   n/a  too few (<20)
+  confirm entry                EURUSD            3.00      3   0   0    3   0%  20%  +0.24   +0.7   n/a  too few (<20)
+  limit (blind, first retest)  6-market basket   3.00     17   0   4   13   0%  20%  -0.08   -1.3  -0.4  too few (<20)
+  limit, SL +0.5 ATR wider     6-market basket   3.50     17   0   4   13   0%  20%  -0.10   -1.6  -0.6  too few (<20)
+  sweep entry                  6-market basket   3.00      6   0   2    4   0%  20%  +0.02   +0.1   n/a  too few (<20)
+  confirm entry                6-market basket   3.00     11   0   2    9   0%  20%  +0.03   +0.3   0.1  too few (<20)
+
+Evidence is insufficient: none of the 8 variant runs had at least 20 closed trades and a result above break-even on this window. Don't read the comparison as a fix; it only shows how each entry style behaved here.
+
+SUGGESTED FIXES
+  * Get more samples: run it across a basket (e.g. all FX pairs) or a longer window before trusting a number.
+  * Use a nearer target (lower R:R) or a tighter, structure-based stop.
+
+These notes come from past candles in the tested window only. They describe what happened, not what will happen. Small samples and trying several variants both make results look better than they are. Not financial advice.

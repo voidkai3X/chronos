@@ -9,7 +9,7 @@ CHRONOS replays one trade setup across recent MFP candles and reports how that s
 
 The backtest engine is deterministic and rule-based. A planned insights layer may later reword the engine's numbers; it will not invent results, place orders, or guarantee profit.
 
-Read-only. It uses only MFP's public, keyless market-data WebSocket (`wss://api-stream.myfundedperpetuals.com/v1/market-data`) and the public `/v1/markets` list. It needs no API key and never places an order.
+Read-only. Candles come first from MFP's public, keyless market-data WebSocket (`wss://api-stream.myfundedperpetuals.com/v1/market-data`), with the public `/v1/markets` list for symbols. Where MFP history is shorter than the 90-day window, older bars are backfilled from public perp feeds (OKX, then Bybit) or, for indices and commodities with no perp, Yahoo Finance and Dukascopy. Every result says which source covered which dates. It needs no API key and never places an order. See [Data sources](#data-sources).
 
 This repository is source only. Hosting, GitHub Pages, and deploy workflows are not included.
 
@@ -62,7 +62,8 @@ Level formats:
 
 | Option | Default | Meaning |
 |---|---|---|
-| `--days` | 60 | Test window (30–60 makes sense; MFP history on some markets is shorter) |
+| `--days` | 90 | Test window. 14 more days are loaded before it as indicator warm-up. If a market has less history, the test runs on what exists and reports the real number of days |
+| `--no-backups` | off | MFP feed only: no backfill from OKX, Bybit, Yahoo or Dukascopy |
 | `--interval` | 15m | Candles used to simulate fills (5m, 15m, 30m, 1h) |
 | `--expiry` | 72h | Unfilled order is cancelled after this |
 | `--max-hold` | 7d | Time stop after fill, exits at market. `none` = hold until TP or SL |
@@ -101,6 +102,41 @@ Coaching:
 | Option | Default | Meaning |
 |---|---|---|
 | `--insights` | off | Print plain-English findings, a what-if comparison (limit / wider SL / sweep / confirm, on the market and on a basket) and suggested fixes. Included in `--json` output under `insights` |
+
+## Data sources
+
+CHRONOS loads 15m bars (5m, 30m and 1h also work) in UTC from several public, keyless sources, in this order of preference:
+
+1. **MFP feed** (MyFundedPerps public market-data WebSocket). Always used where it has bars.
+2. **OKX perp** (`/api/v5/market/history-candles`, paged back 100 bars at a time).
+3. **Bybit perp** (`/v5/market/kline`, category linear) where OKX has no perp.
+4. **Yahoo Finance** (chart API) only for FX, indices and commodities with no perp. Labelled "not a perp". Yahoo gives 5m, 15m and 30m bars for the **last 60 days only**; older requests return HTTP 422.
+5. **Dukascopy** public datafeed (1-minute CFD candles, aggregated) as a last resort for the same markets. Labelled "not a perp". From this box it often answered 429, 503 or dropped the TLS connection (24 Nov 2026), so each call has a 90 s budget (`CHRONOS_DUKA_BUDGET_S`); finished days are cached and the next run continues.
+
+Spot data is never used. Binance futures answered from the box on 24 Nov 2026, but MFP's Binance markets already come from Binance, so it is not called directly. The Hyperliquid `candleSnapshot` adapter exists, but Hyperliquid keeps only the latest 5000 candles (about 52 days of 15m), the same history MFP already serves for `xyz:` markets.
+
+**Merge rules** (`sources.py`, tested offline in `tests/test_merge.py`)
+- MFP bars always win. Backups only **backfill bars older than** the earliest bar already merged. They never replace MFP bars or fill holes inside MFP data.
+- No bars are invented. Holes stay holes and are reported as gaps. Weekend closures on FX and index markets are counted separately. Dukascopy's zero-volume filler minutes are dropped.
+- Every bar's open time must be a multiple of the interval in UTC. Misaligned bars are dropped, never shifted.
+- **Overlap check at each splice:** closes of the backup and the newer data are compared on their common bars in the 7 days after the splice point. If the median absolute difference is above 0.15% (crypto, stocks, indices, commodities) or 0.05% (FX), the backup is scaled by the median close ratio, which is a constant basis adjustment for futures vs perp. That only happens if the ratio is within 5% of 1 and the scaled difference falls under the threshold. Otherwise the backup is **rejected** and not used.
+- Each result (text, JSON `data.provenance`, and the web page) shows the sources with their date ranges, the days actually tested, the days loaded including warm-up, gaps, and the overlap check.
+- The cache is in `candle_cache/<source>/<symbol>_<interval>.pkl`. It is written atomically (temp file, fsync, rename) and remembers which ranges were fetched, so only missing ranges are requested. Empty answers are not remembered and are asked again next time.
+
+`python3 sources.py coverage` maps every MFP market to its backups, loads 90 + 14 days, and writes `data_sources.json`. It also writes a 14-day QA comparison of MFP against each backup for FX, indices, `xyz:` and a few crypto markets. `python3 sources.py show EURUSD` prints one market's provenance. `python3 sources.py qa EURUSD` runs the QA comparison.
+
+**Coverage on 24 Nov 2026** (15m bars, 104 days requested = 90 tested + 14 warm-up):
+
+| Markets | Source used | Loaded | Tested |
+|---|---|---|---|
+| 96 Binance-listed (crypto, stocks, metals, oil) | MFP only | 104 d | 90 d |
+| 6 FX (`veranta`), DJI (`ostium`) | MFP only | 104 d | 90 d |
+| `xyz:AAPL`, `xyz:AMZN`, `xyz:MSFT` | OKX perp to 3 Oct, then MFP | 104 d | 90 d |
+| `xyz:JP225` | OKX perp from 9 Sep (listing date), then MFP | 76.8 d | ~63 d |
+| `xyz:SP500`, `xyz:XYZ100` | Yahoo ES=F / NQ=F (basis-adjusted) 27 Sep to 2 Oct, then MFP | 58 d | ~44 d |
+| `xyz:BRENTOIL` | MFP only (Yahoo BZ=F rejected: 0.37% diff, the ratio could not fix it) | 52.2 d | ~38 d |
+
+Overlap at the splice points: AAPL 0.087%, AMZN 0.071%, MSFT 0.084%, JP225 0.090% (all OK); ES=F 0.695% and NQ=F 0.796% before adjustment, 0.012% and 0.022% after; BZ=F 0.374% (rejected). Recent 14-day QA, MFP vs backup median close diff: BTC and ETH 0.005% (OKX and Bybit), XAU 0.01%; FX vs Yahoo 0.004% (GBP, JPY, CAD, CHF), 0.028% (EUR) and 0.034% (AUD); FX vs Bybit FX perps 0.09–0.12%; DJI vs YM=F 0.106%. Dukascopy was skipped in QA because it is slow. These numbers come from `data_sources.json` and will drift.
 
 ## Run the web app
 
@@ -224,6 +260,8 @@ Output includes orders, fills, unfilled orders, TP, SL and time exits; win rate 
 - **Hand-built sweep.** Price taps a supply zone, wicks 0.5 above its far edge, and closes back inside. The short is entered on the first 15m close back under the edge, never before, with the SL above the sweep high, and it hits TP at +2R. With the data cut before that close, there is no trade. A plain retest that never trades past the far edge gives no sweep trade.
 - **Hand-built confirm.** Tap, then a 15m swing low at 98.9, a push up, and a bearish close at 98.7. The short is entered there, with the SL beyond the zone's far edge.
 
+`python tests/test_merge.py` runs offline checks for the multi-source merge: no duplicate bars and UTC-aligned open times; MFP precedence on overlap (backups only add older bars); holes inside MFP or a backup are not filled and are reported; basis adjustment and rejection at the overlap check; a chain of backups with misaligned bars dropped; weekend closures not counted as gaps; a window that starts on a weekend needs no backfill; and an atomic, source-keyed cache that only fetches missing ranges.
+
 `python tests/sanity.py` runs three checks (the look-ahead and coin-flip checks fetch live MFP candles):
 
 - **Look-ahead.** Deleting future candles must not change any trade that had already finished: 5 markets, both sides, 3 cut points.
@@ -232,14 +270,15 @@ Output includes orders, fills, unfilled orders, TP, SL and time exits; win rate 
 
 ## Limitations
 
-- MFP history is currently about 60 days on Binance-sourced markets. Hyperliquid `xyz:` markets started around 2 Oct 2026, so those windows are shorter. A rolling 3-month window is on the roadmap and is not available yet.
+- The default window is a rolling 90 days. MFP serves more than 104 days of 15m history on Binance, FX and DJI markets. `xyz:` markets on MFP start around 2–3 Oct 2026; OKX perps backfill AAPL, AMZN and MSFT to the full 90 days, but JP225, SP500, XYZ100 and BRENTOIL stay shorter (see Data sources). Short markets run on what exists, and the result shows the real number of days.
+- Backfilled bars come from a different venue. OKX and Bybit stock perps differ from MFP by about 0.07–0.15%. Yahoo index futures carry a basis, which is removed with one constant ratio, but futures rolls inside the backfill are not modelled. Dukascopy is unreliable from this box.
 - Every-close mode tests the setup's shape at every 4h close, not only where a pattern appears. `--trend-filter` is a rough context filter only.
 - Pattern mode's zones are a **rule-based approximation** of the zones a trader draws by eye. It does not see liquidity sweeps, BOS confirmation, equal highs and lows, efficiency or imbalance, or higher-timeframe context. It may miss zones you would take and take zones you would skip. Your own chart zone may not match any detected zone; see "Default stop buffer" above.
 - The sweep and confirm entries are mechanical rules: the "liquidity" is the zone's far edge, and the swing is a 2-bar fractal on 15m. They do not see equal highs and lows, session highs, or higher-timeframe context, and confirm-tf candles finer than the 15m data (5m) need `--interval 5m`.
-- With about 60 days of data, sweep and confirm on one market give only a handful of trades. The what-if comparison tries 8 variants on the same data, so any "best" one is partly luck. It is evidence to forward-test, not a fix.
-- With about 60 days of data, a single market gives only a handful of fresh zones (about 5 on 4h, about 25 on 30m). Use `--basket` to reach 20+ trades, but pooling assumes the pattern behaves the same across pairs.
+- Even with 90 days of data, sweep and confirm on one market give only a handful of trades. The what-if comparison tries 8 variants on the same data, so any "best" one is partly luck. It is evidence to forward-test, not a fix.
+- With 90 days of data, a single market still gives only a handful of fresh zones (AUD/USD: 33 on 30m; EUR/USD: 9 on 4h). Use `--basket` to reach 20+ trades, but pooling assumes the pattern behaves the same across pairs.
 - The zone rule's defaults were chosen before looking at results and were not optimised. Changing them and keeping whichever looks best would be curve-fitting on a tiny sample.
-- One trade at a time gives about 10–30 trades in 60 days. Most single setups will read "too few samples". Treat any result under about 50 trades as a rough check, not proof.
+- One trade at a time gives about 15–45 trades in 90 days. Most single setups will read "too few samples". Treat any result under about 50 trades as a rough check, not proof.
 - 15m candles cannot show the order of moves inside a bar. The tie rules always assume the worse case.
 - Funding and slippage beyond bar gaps are not modelled yet.
 - Results describe the past only. They are not a forecast and not advice.
@@ -250,12 +289,14 @@ Past results do not guarantee future profit. CHRONOS does not predict prices, do
 
 ## Example results
 
-`examples/` holds the text reports for the two example setups (AUD/USD short and EUR/USD short) in pattern mode, on one market and on the FX basket, plus every-close runs for comparison. The run time is in `examples/RUN_TIME.txt`. The `*_insights_*` files are the same setups with `--insights` (findings, what-if comparison, suggested fixes), with JSON for the single-market runs; their run time is in `examples/RUN_TIME_INSIGHTS.txt`. `web/screenshot-insights.png` shows the Insights panel. The numbers move as the 60-day window rolls forward.
+`examples/` holds the text reports for the two example setups (AUD/USD short and EUR/USD short) in pattern mode, on one market and on the FX basket, plus every-close runs for comparison. The run time is in `examples/RUN_TIME.txt`. The `*_insights_*` files are the same setups with `--insights` (findings, what-if comparison, suggested fixes), with JSON for the single-market runs; their run time is in `examples/RUN_TIME_INSIGHTS.txt`. `web/screenshot-insights.png` shows the Insights panel. The numbers move as the window rolls forward.
+
+The `*_90d.*` files are the 90-day reruns with insights, made 24 Nov 2026 23:40 WAT (`examples/RUN_TIME_90D.txt`). The `*_60d_now.*` files are the same setups at the same time with `--days 60`, for a like-for-like comparison. The every-close geometry is scaled to the current price and ATR, so older 60-day files are not directly comparable.
 
 ## Roadmap
 
 **Week 1**
-- Extend coverage toward a 90-day window by merging additional public sources, with every bar labelled by source.
+- ~~Extend coverage to a 90-day window by merging public sources, with every bar labelled by source.~~ Done.
 - Model slippage (beyond the current gap-through-SL-at-open rule).
 - Add per-IP rate limits before any public hosting.
 
