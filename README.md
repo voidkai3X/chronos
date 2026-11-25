@@ -2,10 +2,11 @@
 
 AI-assisted trading research and historical backtesting on MyFundedPerps (MFP) market data.
 
-CHRONOS replays one trade setup across recent MFP candles and reports how that setup would have done. It has two modes:
+CHRONOS replays one trade setup across recent MFP candles and reports how that setup would have done. The core idea is to take whatever setup you picture — order flow, ICT, SMC, a zone retest, or just a shape — and test it on past moments with very similar price action.
 
-- **Every 4h close** (`--mode every-close`, the default): the setup's shape (entry, stop, target in ATR) is placed at every 4h close. This tests the distances, not the reason for the trade.
-- **Pattern only** (`--mode pattern`): the tester finds supply zones (for shorts) or demand zones (for longs) by rule and only places the trade when price comes back to a fresh zone. This tests the zone-retest idea itself.
+- **Similar moments** (`--mode similar`): fingerprints the last N candles at the setup moment (scale-free path plus trend, volatility, swings, sweeps and impulse), searches the same market for the closest non-overlapping windows, and places the same ATR-scaled trade. This is the default in the web app.
+- **Every 4h close** (`--mode every-close`, the CLI default): the setup's shape (entry, stop, target in ATR) is placed at every 4h close. This tests the distances, not the reason for the trade.
+- **Pattern only** (`--mode pattern`): optional. The tester finds supply or demand areas by rule and only places the trade on a fresh retest. This is not the headline mode.
 
 The backtest engine is deterministic and rule-based. A planned insights layer may later reword the engine's numbers; it will not invent results, place orders, or guarantee profit.
 
@@ -41,7 +42,13 @@ python tester.py BTC long --entry=-1.2% --sl=-2.8% --tp 3R          # percent / 
 python tester.py ETH short --entry=+0.8% --sl=+2% --tp 3R --json     # JSON to stdout
 python tester.py SOL long --entry=-1% --sl=-3% --tp 3R --json-out sol.json   # also saves every simulated trade
 
-# pattern mode: only trade retests of fresh supply/demand zones
+# similar mode: replay on past windows with similar price action
+python tester.py HYPE long --entry 56.65 --tp 69.81 --sl 53.86 --mode similar --days 90
+python tester.py USDJPY short --entry 159.50 --tp 156.83 --sl 160.465 --mode similar --similar-tf 1h --similar-bars 24
+python tester.py HYPE long --entry 56.65 --tp 69.81 --sl 53.86 --mode similar --scan
+python tester.py USDJPY short --entry 159.50 --tp 156.83 --sl 160.465 --mode similar --force-scan --scan-scope family
+
+# pattern mode (optional): only trade retests of fresh supply/demand areas
 python tester.py AUDUSD short --entry 0.66629 --tp 0.65881 --sl 0.66833 --mode pattern --zone-tf 30m
 python tester.py EURUSD short --entry 1.11993 --tp 1.08353 --sl 1.12886 --mode pattern --zone-tf 4h --basket fx
 python tester.py EURUSD short --entry 1.11993 --tp 1.08353 --sl 1.12886 --compare GBPUSD,AUDUSD,USDJPY,USDCAD,USDCHF
@@ -76,9 +83,16 @@ Level formats:
 | `--no-fees` | off | Ignore commissions and swap |
 | `--refresh` | off | Ignore the candle cache |
 | `--ref` | last close | Override the current price |
-| `--mode` | every-close | `every-close` or `pattern` |
-| `--basket` / `--symbols` | none | Also run on these markets and pool the results: `fx` (all MFP FX pairs) and/or a comma list. Works in both modes |
+| `--mode` | every-close | `similar`, `every-close` (CLI default) or `pattern`. The web app defaults to `similar` |
+| `--basket` / `--symbols` | none | Also run on these markets and pool the results: `fx` (all MFP FX pairs) and/or a comma list. Works in every mode |
 | `--compare` | none | Rerun the same setup (ATR-scaled) on up to 5 other markets and print a comparison table plus a pooled row. Example: `--compare GBPUSD,AUDUSD,USDJPY`. Cannot be combined with `--basket` |
+| `--similar-tf` | 1h | similar: timeframe of the fingerprint path (15m, 30m, 1h, 4h) |
+| `--similar-bars` | 24 | similar: candles in the fingerprint (8-96) |
+| `--similar-k` | 30 | similar: max non-overlapping historical matches per market |
+| `--similar-at` | last visit to `--entry` | similar: setup moment as UTC ms, or `YYYY-MM-DD` / `YYYY-MM-DDTHH:MM` in WAT. Default is the last time price traded at your entry (or now if it is still there) |
+| `--scan` | off | After a passing backtest (edge or possible edge), scan live markets for similar price action |
+| `--force-scan` | off | Run the live scan even if the backtest did not pass; the report is labelled FORCED |
+| `--scan-scope` | family | Live scan universe: `family` (FX/index/commodity family, or a liquid crypto core), `all`, `passed`, or a comma list of markets |
 
 Pattern-mode options:
 
@@ -258,6 +272,8 @@ Output includes orders, fills, unfilled orders, TP, SL and time exits; win rate 
 - **Orders never use future zones.** Every order's zone was confirmed at or before the order time, and it was untouched before then.
 - **Truncation.** Cutting off future candles does not change any pattern trade that had already finished.
 - **Hand-built retest.** A base, then a drop, then a rally back to the zone low. The order fills at the zone low with the stop above the zone, and it hits TP for exactly +2R. With the data cut before the drop candle closes, there is no zone and no order.
+
+`python tests/test_similar.py` runs offline checks for similar mode: the path is scale-free (a 2x-scaled copy stays close); fingerprints are causal (later bars cannot change an earlier window); overlapping matches are dropped; the query window itself is not traded; results sort by distance; live levels keep the same ATR shape and R:R; and the live-scan gate only opens for a possible or proven edge.
 
 `python tests/test_compare.py` runs offline checks for `--compare`: more than 5 other markets is rejected; transferred levels keep the same ATR shape and R:R at a different price and ATR; pooled closed trades, TP/SL/time exits and total R match the concatenated trade list; and the one-line summary counts only the other pairs.
 

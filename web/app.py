@@ -63,9 +63,24 @@ def parse_test_body(d, require_compare=False):
     if not 3600_000 <= exp_ms <= 14 * 86400_000:
         raise ValueError("expiry must be between 1h and 14d")
     trend = bool(d.get("trend_filter"))
-    mode = str(d.get("mode") or "every-close").lower()
-    if mode not in ("every-close", "pattern"):
-        raise ValueError("mode must be 'every-close' or 'pattern'")
+    mode = str(d.get("mode") or "similar").lower()
+    if mode not in ("every-close", "pattern", "similar"):
+        raise ValueError("mode must be 'similar', 'every-close' or 'pattern'")
+    similar_tf = str(d.get("similar_tf") or "1h").lower()
+    if similar_tf not in ("15m", "30m", "1h", "4h"):
+        raise ValueError("similar_tf must be 15m, 30m, 1h or 4h")
+    try:
+        similar_bars = int(d.get("similar_bars") or 24)
+    except (TypeError, ValueError):
+        raise ValueError("similar_bars must be a number")
+    if not 8 <= similar_bars <= 96:
+        raise ValueError("similar_bars must be between 8 and 96")
+    try:
+        similar_k = int(d.get("similar_k") or 30)
+    except (TypeError, ValueError):
+        raise ValueError("similar_k must be a number")
+    if not 5 <= similar_k <= 80:
+        raise ValueError("similar_k must be between 5 and 80")
     zone_tf = str(d.get("zone_tf") or "4h").lower()
     if zone_tf not in ("30m", "1h", "4h"):
         raise ValueError("zone_tf must be 30m, 1h or 4h")
@@ -105,6 +120,7 @@ def parse_test_body(d, require_compare=False):
         raise ValueError("compare must list 1 to 5 other markets")
     return dict(market=m, side=side, entry=entry, tp=tp, sl=sl, days=days, expiry=expiry,
                 trend=trend, mode=mode, zone_tf=zone_tf, entry_style=entry_style,
+                similar_tf=similar_tf, similar_bars=similar_bars, similar_k=similar_k,
                 want_insights=want_insights, slb=slb, extras=extras)
 
 
@@ -117,6 +133,9 @@ def engine_cmd(p, json_path, compare=False):
         cmd += ["--zone-tf", p["zone_tf"], "--entry-style", p["entry_style"]]
         if p["slb"] is not None:
             cmd += [f"--sl-buffer-atr={p['slb']!r}"]
+    elif p["mode"] == "similar":
+        cmd += ["--expiry", p["expiry"], "--similar-tf", p["similar_tf"],
+                "--similar-bars", str(p["similar_bars"]), "--similar-k", str(p["similar_k"])]
     else:
         cmd += ["--expiry", p["expiry"]]
     if compare:
@@ -274,6 +293,83 @@ def run_compare():
     n = 1 + len(p["extras"])
     timeout = int(os.environ.get("COMPARE_TIMEOUT", str(max(RUN_TIMEOUT, 120 * n))))
     return run_engine(p, compare=True, timeout=timeout)
+
+
+SCAN_TIMEOUT = int(os.environ.get("SCAN_TIMEOUT", "180"))
+
+
+@app.post("/api/scan")
+def run_scan():
+    """Fingerprint each market's latest window against the setup moment. Gated unless force=true."""
+    import similar as S
+    d = request.get_json(silent=True) or {}
+    try:
+        p = parse_test_body(d, require_compare=False)
+    except ValueError as e:
+        return err(str(e))
+    result = d.get("result") if isinstance(d.get("result"), dict) else None
+    if result is None and isinstance(d.get("verdict"), str):
+        result = dict(verdict=d["verdict"])
+    forced = bool(d.get("force") or d.get("force_scan"))
+    reason = S.gate_reason(result)
+    if reason and not forced:
+        return jsonify(gated=True, reason=reason, forced=False, rows=[],
+                       generated=tester.fmt_ts(int(time.time() * 1000)))
+    m = p["market"]
+    query_in = d.get("query") if isinstance(d.get("query"), dict) and d.get("query").get("path") else None
+    try:
+        markets = tester.load_markets()
+        scope, kind = S.resolve_scope(str(d.get("scope") or d.get("scan_scope") or "family"), m, markets, None)
+    except ValueError as e:
+        return err(str(e))
+    except Exception as e:
+        return err(f"could not load MFP markets list: {e}", 502)
+    ids = sorted({x["market_id"] for x in ([m] + list(scope))})
+    if not _run_sem.acquire(timeout=5):
+        return err("server busy with other tests, try again in a moment", 429)
+    got = []
+    try:
+        for mid in ids:
+            lk = market_lock(mid)
+            if not lk.acquire(timeout=5):
+                return err("server busy with other tests, try again in a moment", 429)
+            got.append(lk)
+        now = int(time.time() * 1000)
+        step = tester.STEP["15m"]
+        end_ms = now - now % step
+        warm = 14 * 86400_000
+        hist = max(40, int(S.ATR_PCT_LOOKBACK * tester.STEP[p["similar_tf"]] / 86400_000) + 2) * 86400_000
+        start = end_ms - hist - warm
+        try:
+            base = tester.fetch_candles(m, "15m", start, end_ms, refresh=False)
+        except Exception as e:
+            return err(f"could not load candles for {m['market_id']}: {e}", 502)
+        if len(base) < 200:
+            return err(f"not enough history for {m['market_id']}", 422)
+        h4c = [b for b in tester.resample(base, tester.H4) if b[5] >= b[0] + tester.H4 - step]
+        atr_now = tester.atr_series(h4c)[-1]
+        ref = base[-1][4]
+        g = tester.build_geometry(p["side"], p["entry"], p["tp"], p["sl"], ref, atr_now)
+        g["market_id"] = m["market_id"]
+        q = query_in
+        if q is None:
+            q, *_ = S.query_fingerprint(base, tf=p["similar_tf"], n=p["similar_bars"],
+                                        end_ms=end_ms, interval="15m", entry=p["entry"])
+        if q is None:
+            return err("could not fingerprint the setup moment", 422)
+        t0 = time.time()
+        scan = S.scan_live(q, g, scope, interval="15m", tf=p["similar_tf"], n=p["similar_bars"],
+                           trend_filter=p["trend"], refresh=False, end_ms=end_ms)
+        scan["forced"] = forced
+        scan["gate_reason"] = reason
+        scan["scope"] = kind
+        scan["query"] = S.public_query(q)
+        scan["elapsed_s"] = round(time.time() - t0, 1)
+        return jsonify(scan)
+    finally:
+        for lk in reversed(got):
+            lk.release()
+        _run_sem.release()
 
 
 if __name__ == "__main__":

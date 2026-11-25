@@ -22,7 +22,7 @@
     </a>
     <div class="hero-copy">
       <h1>Backtest your setup on real market history</h1>
-      <p class="sub">Replay your entry, stop and target on past MyFundedPerps candles. Read-only public market data: no keys, no orders.</p>
+      <p class="sub">Take the setup you see on the chart and replay it on past moments with very similar price action. Read-only public market data: no keys, no orders.</p>
     </div>
     <ul class="hero-pills" aria-label="How it works">
       <li><span class="dot"></span>15m candle simulation</li>
@@ -52,24 +52,39 @@
             <button type="button" data-side="short" class="short">▼ Short</button>
           </div>
         </div>
+      </div>
+      <div class="mode-block">
+        <span class="lbl">How to find past setups</span>
+        <div class="toggle seg" id="mode" role="group" aria-label="How to find past setups">
+          <button type="button" data-mode="similar" class="on">Similar moments</button>
+          <button type="button" data-mode="every-close">Every 4h close</button>
+          <button type="button" data-mode="pattern">Pattern only</button>
+        </div>
+      </div>
+
+      <div id="similar-opts" class="grid2 sub-opts">
         <div>
-          <span class="lbl">Mode</span>
-          <div class="toggle seg" id="mode" role="group" aria-label="Mode">
-            <button type="button" data-mode="every-close" class="on">Every 4h close</button>
-            <button type="button" data-mode="pattern">Pattern only</button>
-          </div>
+          <label class="lbl" for="similar-tf">Fingerprint timeframe</label>
+          <div class="sel"><select id="similar-tf">
+            <option value="15m">15m</option><option value="30m">30m</option>
+            <option value="1h" selected>1h</option><option value="4h">4h</option>
+          </select></div>
+        </div>
+        <div>
+          <label class="lbl" for="similar-bars">Candles in the fingerprint</label>
+          <input id="similar-bars" type="number" min="8" max="96" step="1" value="24" inputmode="numeric">
         </div>
       </div>
 
       <div id="pattern-opts" class="grid2 sub-opts" hidden>
         <div>
-          <label class="lbl" for="zone-tf">Zone timeframe</label>
+          <label class="lbl" for="zone-tf">Pattern timeframe</label>
           <div class="sel"><select id="zone-tf">
             <option value="30m">30m</option><option value="1h">1h</option><option value="4h" selected>4h</option>
           </select></div>
         </div>
         <div>
-          <label class="lbl" for="sl-buf">SL beyond zone (ATR)</label>
+          <label class="lbl" for="sl-buf">SL buffer (ATR past the far edge)</label>
           <input id="sl-buf" type="number" step="0.05" min="0" max="10" placeholder="auto" inputmode="decimal">
         </div>
       </div>
@@ -77,8 +92,8 @@
       <div id="style-opts" class="sub-opts" hidden>
         <label class="lbl" for="entry-style">Entry style</label>
         <div class="sel"><select id="entry-style">
-          <option value="limit" selected>Limit at the zone edge (blind, first retest)</option>
-          <option value="sweep">Wait for a sweep of the zone's far edge, enter on the close back inside</option>
+          <option value="limit" selected>Limit at the near edge (blind, first retest)</option>
+          <option value="sweep">Wait for a sweep of the far edge, enter on the close back inside</option>
           <option value="confirm">Wait for a 15m break of structure after the tap</option>
         </select></div>
       </div>
@@ -105,22 +120,27 @@
         </div>
       </div>
       <label class="chk"><input id="trend" type="checkbox"><span class="box" aria-hidden="true"></span><span>Trend filter <span class="muted">only place when the 4h EMA50 slope agrees with the side</span></span></label>
-      <label class="chk"><input id="insights" type="checkbox" checked><span class="box" aria-hidden="true"></span><span>Insights <span class="muted">explain the result and compare limit / wider stop / sweep / confirm entries (a few seconds more)</span></span></label>
+      <label class="chk" id="insights-row"><input id="insights" type="checkbox"><span class="box" aria-hidden="true"></span><span>Insights <span class="muted">explain the result and compare limit / wider stop / sweep / confirm entries (a few seconds more; pattern-oriented)</span></span></label>
 
       <button id="run" class="run" type="submit"><span class="spin" hidden></span><span class="txt">Run test</span></button>
       <div id="form-err" class="err" role="alert" hidden></div>
     </form>
     <details class="note">
       <summary>How the test works</summary>
+      <p><b>Similar moments (default):</b> the tester fingerprints the last N candles at your setup moment (the last time
+      price traded at your entry, or now if it is still there). The path is scale-free, and it also records trend,
+      volatility, swing distance, sweeps and impulse. It then searches the past of the same market for the closest
+      non-overlapping windows, places your entry, stop and single target scaled by 4h ATR, and reports a similarity
+      score and the date of each match so you can check them on a chart.</p>
       <p><b>Every 4h close:</b> your entry, stop and target become a shape scaled by 4h ATR, placed at every 4h close
       (one order or trade at a time). It tests the distances, not the reason you took the trade.</p>
-      <p><b>Pattern only:</b> the tester finds supply zones (for shorts) or demand zones (for longs) by rule: 1-6 small
-      candles, then a strong move of at least 1 ATR away. When price is away from a fresh zone it rests a limit at the
-      zone's near edge, stop beyond the far edge, target at your R:R. Only candles already closed are used.</p>
-      <p><b>Entry styles (pattern only):</b> <i>sweep</i> waits for price to poke past the zone's far edge (where stops sit)
-      and close back inside; <i>confirm</i> waits for a 15m candle to close through the last 15m swing after the tap.
-      Both put the stop beyond the move's extreme and the zone.</p>
-      <p>Both modes are simulated on 15m MFP candles with MFP fees. If TP and SL hit in the same candle it counts as a loss.</p>
+      <p><b>Pattern only:</b> a rule-based approximation of supply or demand zones (1-6 small candles, then a strong
+      move of at least 1 ATR away). When price is away from a fresh zone it rests a limit at the near edge, stop beyond
+      the far edge, target at your R:R. This is optional and is not how most order-flow, ICT or SMC setups are tested.
+      Only candles already closed are used.</p>
+      <p><b>Entry styles (pattern only):</b> <i>sweep</i> waits for price to poke past the far edge (where stops sit)
+      and close back inside; <i>confirm</i> waits for a 15m candle to close through the last 15m swing after the tap.</p>
+      <p>All modes are simulated on 15m MFP candles with MFP fees. If TP and SL hit in the same candle it counts as a loss.</p>
     </details>
   </section>
 
@@ -128,7 +148,7 @@
     <div class="empty" id="empty">
       <img class="empty-mark" src="/static/assets/chronos-logo.png" alt="CHRONOS logo" width="120" height="67">
       <h3>Ready when you are</h3>
-      <p>Pick a market, enter your entry, take profit and stop loss, then run the test. Once a market's candles are cached a run takes a few seconds. The first run on a market takes longer.</p>
+      <p>Pick a market, enter your entry, take profit and stop loss, then run the test. CHRONOS looks for past moments with similar price action and replays the same trade. Once a market's candles are cached a run takes a few seconds. The first run on a market takes longer.</p>
       <ol class="empty-steps"><li>Choose a market</li><li>Set side and levels</li><li>Run test</li></ol>
     </div>
 
@@ -155,6 +175,13 @@
       </div>
       <div class="warn" id="warn" hidden></div>
       <div class="cards" id="cards"></div>
+
+      <div class="panel sim-panel" id="sim-panel" hidden>
+        <div class="panel-h"><span>Closest past moments</span><span class="muted small" id="sim-count"></span></div>
+        <p class="sim-lead">These are the windows whose price action was closest to your setup. Open them on your chart to judge the match. Similarity is a closeness score, not a forecast.</p>
+        <div class="sim-table" id="sim-table" role="table" aria-label="Closest past moments"></div>
+        <div class="sim-cards" id="sim-cards"></div>
+      </div>
 
       <div class="panel chart-panel">
         <div class="panel-h"><span>Equity curve</span><span class="muted small">cumulative R, after fees</span></div>
@@ -203,11 +230,30 @@
         </div>
       </div>
 
+      <div class="panel scan-panel" id="scan-panel" hidden>
+        <div class="panel-h"><span>Live scan</span><span class="muted small">markets whose price action now looks like this setup</span></div>
+        <p class="scan-lead" id="scan-lead">When this backtest shows a passing edge (possible edge or edge on this sample), you can scan live markets for a similar moment happening now. One take-profit, stop beyond the same ATR geometry.</p>
+        <button id="scan-run" class="run scan-run" type="button" disabled><span class="spin" hidden></span><span class="txt">Scan live markets</span></button>
+        <p class="scan-gate" id="scan-gate" hidden></p>
+        <div id="scan-err" class="err" role="alert" hidden></div>
+        <div class="scan-skel" id="scan-skel" hidden>
+          <span class="spin"></span>
+          <span id="scan-skel-txt">Fingerprinting live markets...</span>
+        </div>
+        <div id="scan-banner" class="scan-forced" hidden>FORCED SCAN: the backtest did not pass. This is not a qualified edge. Not advice. Past results don't guarantee future results.</div>
+        <div id="scan-out" hidden>
+          <div class="scan-meta" id="scan-meta"></div>
+          <div class="scan-table" id="scan-table" role="table" aria-label="Live similar setups"></div>
+          <div class="scan-cards" id="scan-cards"></div>
+          <p class="scan-disc">Not advice. Past results don't guarantee future results. A high score means the path looks similar, not that the trade will work.</p>
+        </div>
+      </div>
+
       <div class="panel">
         <div class="panel-h"><span>Simulated trades</span><span class="muted small" id="t-count"></span></div>
         <div class="tbl-wrap">
           <table id="trades">
-            <thead><tr><th>#</th><th>Placed (WAT)</th><th>Zone (near / far edge)</th><th>Filled (WAT)</th><th>Entry</th><th>Exit (WAT)</th><th>Exit price</th><th>Result</th><th class="r">R</th></tr></thead>
+            <thead><tr id="trades-head"><th>#</th><th>Placed (WAT)</th><th>Score</th><th>Filled (WAT)</th><th>Entry</th><th>Exit (WAT)</th><th>Exit price</th><th>Result</th><th class="r">R</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -221,7 +267,7 @@
   <div class="foot-in">
     <div class="foot-brand"><img src="/static/assets/chronos-logo.png" alt="" width="40" height="22"><span>CHRONOS</span></div>
     <p><b>Past results only.</b> Every number here comes from replaying past MFP candles. It is not a prediction, not financial advice, and no guarantee of profit.</p>
-    <p class="muted">Limitation: pattern mode's zones are a rule-based approximation of zones a trader draws by eye.</p>
+    <p class="muted">A similarity score measures closeness of recent price action, not future performance. Pattern mode is an optional rule-based approximation of supply or demand areas a trader might draw by eye.</p>
   </div>
 </footer>
 <div class="toasts" id="toasts" aria-live="assertive"></div>

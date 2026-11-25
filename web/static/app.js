@@ -1,6 +1,7 @@
 (() => {
 const $ = id => document.getElementById(id);
-let markets = [], side = "long", mode = "every-close", chosen = null, acIdx = -1, lastResult = null, lastRequest = null;
+let markets = [], side = "long", mode = "similar", chosen = null, acIdx = -1, lastResult = null, lastRequest = null;
+const forceScan = new URLSearchParams(location.search).get("force_scan") === "1";
 
 const fmt = (x, d) => x == null ? "-" : Number(x).toLocaleString("en-US", {maximumFractionDigits: d ?? 6});
 const px = x => { if (x == null) return "-"; const a = Math.abs(x); return fmt(x, a >= 1000 ? 2 : a >= 1 ? 4 : 6); };
@@ -70,15 +71,21 @@ $("side").addEventListener("click", e => {
   [...$("side").children].forEach(x => x.classList.toggle("on", x === b));
   updateRR();
 });
+function syncMode() {
+  $("pattern-opts").hidden = mode !== "pattern";
+  $("style-opts").hidden = mode !== "pattern";
+  if ($("similar-opts")) $("similar-opts").hidden = mode !== "similar";
+  if ($("insights-row")) $("insights-row").hidden = mode === "similar";
+  $("expiry").disabled = mode === "pattern";
+  $("exp-note").textContent = mode === "pattern" ? "· not used in pattern mode" : "";
+}
 $("mode").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
   mode = b.dataset.mode;
   [...$("mode").children].forEach(x => x.classList.toggle("on", x === b));
-  $("pattern-opts").hidden = mode !== "pattern";
-  $("style-opts").hidden = mode !== "pattern";
-  $("expiry").disabled = mode === "pattern";
-  $("exp-note").textContent = mode === "pattern" ? "· not used in pattern mode" : "";
+  syncMode();
 });
+syncMode();
 function levelError() {
   const e = parseFloat($("entry").value), t = parseFloat($("tp").value), s = parseFloat($("sl").value);
   if ([e, t, s].some(isNaN)) return null;
@@ -130,8 +137,13 @@ async function run() {
   if (le === null) return showErr("Enter entry, TP and SL.");
   if (le) return showErr(le);
   const body = { market: mk, side, entry: +$("entry").value, tp: +$("tp").value, sl: +$("sl").value,
-    days: +$("days").value, expiry: $("expiry").value, trend_filter: $("trend").checked, mode, insights: $("insights").checked };
+    days: +$("days").value, expiry: $("expiry").value, trend_filter: $("trend").checked, mode,
+    insights: mode === "similar" ? false : $("insights").checked };
   if (mode === "pattern") { body.zone_tf = $("zone-tf").value; body.entry_style = $("entry-style").value; if ($("sl-buf").value !== "") body.sl_buffer_atr = +$("sl-buf").value; }
+  if (mode === "similar") {
+    body.similar_tf = $("similar-tf").value;
+    body.similar_bars = +$("similar-bars").value || 24;
+  }
   lastRequest = body;
   setBusy(true);
   try {
@@ -158,27 +170,38 @@ function render(o) {
   const g = o.setup, s = o.result, m = o.market, p = o.params;
   hadResult = true; $("empty").hidden = true; $("skel").hidden = true; $("res").hidden = false;
   $("r-title").textContent = `${g.side.toUpperCase()} ${m.market_id}  ·  entry ${fmt(g.entry)}  TP ${fmt(g.tp)}  SL ${fmt(g.sl)}  ·  1:${g.rr.toFixed(2)}`;
-  const pat = p.mode === "pattern";
-  $("r-sub").textContent = `${pat ? "PATTERN mode. " : ""}${o.data.days} days tested on ${o.data.interval} candles, ${wat(o.data.from_ms)} to ${wat(o.data.to_ms)} WAT${o.data.days_requested && o.data.days < o.data.days_requested ? ` (asked for ${o.data.days_requested}; that is all the history that exists)` : ""}. ` +
-    (pat ? `Price at test ${fmt(g.ref)}. ` + (p.entry_style && p.entry_style !== "limit"
-      ? `Entry style ${p.entry_style}: ${p.placement}. Stop ${p.sl_buffer_atr.toFixed(2)} ATR beyond the move's extreme and the zone, target ${g.rr.toFixed(2)}R. Time stop ${p.max_hold}`
-      : `Replayed as a limit at the near edge of each fresh ${g.side === "short" ? "supply" : "demand"} zone on ${p.zone_tf} candles, ` +
-      `stop ${p.sl_buffer_atr.toFixed(2)} ATR beyond the far edge (${p.sl_buffer_source.how}), target ${g.rr.toFixed(2)}R. Time stop ${p.max_hold}`)
-    : `Price at test ${fmt(g.ref)}, 4h ATR ${fmt(g.atr, 4)}. Replayed as entry ${g.entry_atr >= 0 ? "+" : ""}${g.entry_atr.toFixed(2)} ATR (${g.entry_type}), ` +
-      `stop ${g.risk_atr.toFixed(2)} ATR, target ${g.reward_atr.toFixed(2)} ATR. Expiry ${p.expiry}, time stop ${p.max_hold}`) + (p.trend_filter ? ", trend filter on." : ".");
+  const pat = p.mode === "pattern", sim = p.mode === "similar";
+  const windowTxt = `${o.data.days} days tested on ${o.data.interval} candles, ${wat(o.data.from_ms)} to ${wat(o.data.to_ms)} WAT${o.data.days_requested && o.data.days < o.data.days_requested ? ` (asked for ${o.data.days_requested}; that is all the history that exists)` : ""}. `;
+  let how;
+  if (sim) {
+    const qt = o.query && o.query.t ? wat(o.query.t) : "n/a";
+    how = `SIMILAR mode. ${windowTxt}Fingerprinted ${p.similar_bars || 24} x ${p.similar_tf || "1h"} bars ending ${qt} WAT (setup moment). ` +
+      `Replayed the ATR-scaled entry, stop and single target on the closest past windows. Expiry ${p.expiry}, time stop ${p.max_hold}`;
+  } else if (pat) {
+    how = `PATTERN mode. ${windowTxt}Price at test ${fmt(g.ref)}. ` + (p.entry_style && p.entry_style !== "limit"
+      ? `Entry style ${p.entry_style}: ${p.placement}. Stop ${p.sl_buffer_atr.toFixed(2)} ATR beyond the move's extreme, target ${g.rr.toFixed(2)}R. Time stop ${p.max_hold}`
+      : `Replayed as a limit at the near edge of each fresh ${g.side === "short" ? "supply" : "demand"} area on ${p.zone_tf} candles, ` +
+      `stop ${p.sl_buffer_atr.toFixed(2)} ATR beyond the far edge (${p.sl_buffer_source.how}), target ${g.rr.toFixed(2)}R. Time stop ${p.max_hold}`);
+  } else {
+    how = `${windowTxt}Price at test ${fmt(g.ref)}, 4h ATR ${fmt(g.atr, 4)}. Replayed as entry ${g.entry_atr >= 0 ? "+" : ""}${g.entry_atr.toFixed(2)} ATR (${g.entry_type}), ` +
+      `stop ${g.risk_atr.toFixed(2)} ATR, target ${g.reward_atr.toFixed(2)} ATR. Expiry ${p.expiry}, time stop ${p.max_hold}`;
+  }
+  $("r-sub").textContent = how + (p.trend_filter ? ", trend filter on." : ".");
   const [cls, label] = badgeFor(s.verdict);
   $("badge").className = "badge " + cls; $("badge").textContent = label;
   $("verdict-card").className = "verdict-card " + cls;
   $("verdict").textContent = "Engine verdict: " + s.verdict + ".";
   const warns = [];
-  if (!pat && Math.abs(g.entry_atr) > 3) warns.push(`Entry is ${Math.abs(g.entry_atr).toFixed(1)} ATR from the current price, so most replays will not fill.`);
+  if (!pat && !sim && Math.abs(g.entry_atr) > 3) warns.push(`Entry is ${Math.abs(g.entry_atr).toFixed(1)} ATR from the current price, so most replays will not fill.`);
   if (s.shallow_sweep_pct_of_losses && s.sl >= 5 && s.shallow_sweep_pct_of_losses >= 0.2) warns.push("Stop looks too tight: a good share of losers wicked through the stop before the move reached TP.");
   if (p.trend_filter) warns.push(`Trend filter skipped ${o.skipped_by_trend} eligible 4h closes. 4h trend now: ${o.trend_now || "n/a"}.`);
   $("warn").hidden = !warns.length; $("warn").innerHTML = warns.join("<br>");
   const wrCls = s.win_rate == null ? "" : (s.win_rate > s.breakeven_win_rate ? "pos" : "neg");
-  const zcard = pat && o.zones ? [card("Zones found", o.zones.zones_found,
-    `${p.zone_tf} ${g.side === "short" ? "supply" : "demand"} zones · touched ${o.zones.zones_touched} · broken ${o.zones.zones_invalidated} · traded ${o.zones.zones_traded}`)] : [];
-  $("cards").innerHTML = [...zcard,
+  const zcard = pat && o.zones ? [card("Patterns found", o.zones.zones_found,
+    `${p.zone_tf} ${g.side === "short" ? "supply" : "demand"} areas · touched ${o.zones.zones_touched} · broken ${o.zones.zones_invalidated} · traded ${o.zones.zones_traded}`)] : [];
+  const scard = sim && o.similar_matches ? [card("Similar windows", o.similar_matches.filter(x => !x.skipped).length,
+    `up to ${p.similar_k || 30} non-overlapping matches on ${p.similar_tf || "1h"}`)] : [];
+  $("cards").innerHTML = [...zcard, ...scard,
     card("Orders", s.placed, `filled ${s.fills} · unfilled ${s.unfilled}${s.open_at_end ? ` · open ${s.open_at_end}` : ""}`),
     card("Closed trades", s.closed, `TP ${s.tp} · SL ${s.sl}${s.time_exits ? ` · time ${s.time_exits}` : ""}`),
     card("Win rate", pct(s.win_rate), `break-even ${pct(s.breakeven_win_rate)} after fees (${pct(s.breakeven_win_rate_gross)} before)`, wrCls),
@@ -192,9 +215,11 @@ function render(o) {
     `Tie rule: ${p.tie_rule}. Placement: ${p.placement}. Generated ${o.generated.replace("T", " ").replace("Z", " UTC")}` + (o.elapsed_s != null ? `, ran in ${o.elapsed_s}s.` : ".");
   renderProvenance(o.data);
   renderInsights(o.insights);
-  renderTrades(o.trades || []);
+  renderSimilarMatches(o);
+  renderTrades(o.trades || [], p.mode);
   drawChart(o.trades || []);
   setupCompare(o);
+  setupScan(o);
 }
 function renderProvenance(d) {
   const el = $("provenance");
@@ -231,14 +256,21 @@ function renderInsights(ins) {
   $("ins-fixes").innerHTML = fx.map(f => `<li>${esc(f.fix)}${f.evidence.length ? `<ul>${f.evidence.map(e => `<li class="ev">Tested: ${esc(e)}</li>`).join("")}</ul>` : ""}</li>`).join("");
   $("ins-disc").textContent = ins.disclaimer;
 }
-function renderTrades(tr) {
+function renderTrades(tr, md) {
+  const mid = $("trades-head");
+  if (mid) {
+    const col = md === "pattern" ? "Near / far edge" : md === "similar" ? "Score" : "Context";
+    mid.innerHTML = `<th>#</th><th>Placed (WAT)</th><th>${col}</th><th>Filled (WAT)</th><th>Entry</th><th>Exit (WAT)</th><th>Exit price</th><th>Result</th><th class="r">R</th>`;
+  }
   const rows = tr.map((t, i) => {
     const st = t.status, tag = st === "tp" ? "tp" : st === "sl" ? "sl" : st === "time" ? "time" : "unf";
     const lbl = { tp: "TP", sl: "SL", time: "Time exit", unfilled: "Unfilled", open_at_end: "Open", pending_at_end: "Pending" }[st] || st;
     const sweep = st === "sl" && t.sl_then_tp ? ` <span class="muted" title="Price still reached TP after the stop-out">swept</span>` : "";
     const r = t.r_net == null ? "" : `<span class="${t.r_net > 0 ? "pos" : "neg"}">${sgnR(t.r_net)}</span>`;
-    const zn = t.zone_proximal != null ? `${px(t.zone_proximal)} / ${px(t.zone_distal)}` : "-";
-    return `<tr><td>${i + 1}</td><td>${wat(t.placed)}</td><td>${zn}</td><td>${t.filled ? wat(t.filled) : "-"}</td><td>${px(t.fill_px ?? t.entry)}</td>
+    let ctx = "-";
+    if (md === "similar" && t.similar_score != null) ctx = Number(t.similar_score).toFixed(1);
+    else if (t.zone_proximal != null) ctx = `${px(t.zone_proximal)} / ${px(t.zone_distal)}`;
+    return `<tr><td>${i + 1}</td><td>${wat(t.placed)}</td><td>${ctx}</td><td>${t.filled ? wat(t.filled) : "-"}</td><td>${px(t.fill_px ?? t.entry)}</td>
       <td>${t.exit ? wat(t.exit) : "-"}</td><td>${px(t.exit_px)}</td><td><span class="tag ${tag}">${lbl}</span>${sweep}</td><td class="r">${r}</td></tr>`;
   });
   $("trades").querySelector("tbody").innerHTML = rows.join("") || `<tr><td colspan="9" class="muted">No orders were placed in the window.</td></tr>`;
@@ -284,6 +316,121 @@ function drawChart(tr) {
 }
 function niceStep(x) { const p = Math.pow(10, Math.floor(Math.log10(x))), f = x / p; return (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * p; }
 window.addEventListener("resize", () => { if (lastResult) drawChart(lastResult.trades || []); });
+
+// ---------- similar matches + live scan
+function renderSimilarMatches(o) {
+  const panel = $("sim-panel");
+  if (!panel) return;
+  const list = (o.similar_matches || []).filter(m => !m.skipped);
+  if ((o.params || {}).mode !== "similar") { panel.hidden = true; return; }
+  panel.hidden = false;
+  list.sort((a, b) => (a.distance - b.distance) || (a.t - b.t));
+  $("sim-count").textContent = `${list.length} matches, times in WAT (UTC+1)`;
+  const head = `<div class="sim-tr sim-hd" role="row"><span>When (WAT)</span><span>Score</span><span>Dist</span><span>Result</span><span class="r">R</span></div>`;
+  const rows = list.slice(0, 30).map(m => {
+    const st = m.status || "-";
+    const tag = st === "tp" ? "tp" : st === "sl" ? "sl" : st === "time" ? "time" : "unf";
+    return `<div class="sim-tr" role="row"><span>${wat(m.t)}</span><span>${Number(m.score).toFixed(1)}</span>` +
+      `<span>${Number(m.distance).toFixed(3)}</span><span><span class="tag ${tag}">${esc(st)}</span></span>` +
+      `<span class="r ${m.r_net > 0 ? "pos" : m.r_net < 0 ? "neg" : ""}">${m.r_net == null ? "-" : sgnR(m.r_net)}</span></div>`;
+  }).join("") || `<p class="muted">No similar past windows were found in the test range.</p>`;
+  $("sim-table").innerHTML = list.length ? head + rows : rows;
+  $("sim-cards").innerHTML = list.slice(0, 20).map(m =>
+    `<div class="sim-card"><div class="sim-when">${wat(m.t)} WAT</div>` +
+    `<div class="sim-sc">score ${Number(m.score).toFixed(1)}</div>` +
+    `<div class="muted">${esc(m.status || "-")} · ${m.r_net == null ? "-" : sgnR(m.r_net)}</div></div>`
+  ).join("");
+}
+
+function qualifies(o) {
+  const v = ((o && o.result && o.result.verdict) || "").toLowerCase();
+  return v.startsWith("possible edge") || v.startsWith("edge ");
+}
+function gateLabel(o) {
+  const v = ((o && o.result && o.result.verdict) || "").toLowerCase();
+  if (v.startsWith("too few")) return "needs a passing edge first (too few samples)";
+  if (v.startsWith("no edge")) return "needs a passing edge first (no edge)";
+  if (!v) return "needs a passing edge first";
+  return "needs a passing edge first";
+}
+function setupScan(o, keepOut) {
+  const panel = $("scan-panel");
+  if (!panel) return;
+  panel.hidden = false;
+  if (!keepOut) {
+    $("scan-out").hidden = true;
+    $("scan-err").hidden = true;
+    $("scan-skel").hidden = true;
+    $("scan-banner").hidden = true;
+  }
+  const ok = qualifies(o);
+  const btn = $("scan-run");
+  const canForce = forceScan && !ok;
+  btn.disabled = !(ok || canForce);
+  $("scan-gate").hidden = ok;
+  $("scan-gate").textContent = ok ? "" : gateLabel(o);
+  $("scan-lead").textContent = ok
+    ? "This backtest passed. Scan live markets whose current price action looks like this setup. One take-profit and a stop at the same ATR geometry."
+    : "Live scan stays off until a backtest shows a passing edge (possible edge or edge on this sample)." +
+      (canForce ? " URL force_scan=1 is on: you can run a labelled forced scan for review." : "");
+}
+
+let scanBusy = false;
+$("scan-run").addEventListener("click", async () => {
+  if (scanBusy || !lastRequest || !lastResult) return;
+  const ok = qualifies(lastResult);
+  if (!ok && !forceScan) return;
+  scanBusy = true;
+  $("scan-run").disabled = true;
+  $("scan-run").querySelector(".spin").hidden = false;
+  $("scan-run").querySelector(".txt").textContent = "Scanning...";
+  $("scan-skel").hidden = false;
+  $("scan-err").hidden = true;
+  $("scan-out").hidden = true;
+  const body = Object.assign({}, lastRequest, {
+    result: lastResult.result, query: lastResult.query || null, force: !ok && forceScan, scope: "family", insights: false
+  });
+  try {
+    const r = await fetch("/api/scan", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const j = await r.json().catch(() => ({ error: "Server returned an invalid response (" + r.status + ")" }));
+    if (!r.ok || j.error) throw new Error(j.error || ("HTTP " + r.status));
+    if (j.gated) {
+      $("scan-gate").hidden = false;
+      $("scan-gate").textContent = j.reason || "needs a passing edge first";
+    } else {
+      renderScan(j, !ok && forceScan);
+    }
+  } catch (err) {
+    $("scan-err").hidden = false;
+    $("scan-err").textContent = err.message;
+  } finally {
+    scanBusy = false;
+    $("scan-skel").hidden = true;
+    $("scan-run").querySelector(".spin").hidden = true;
+    $("scan-run").querySelector(".txt").textContent = "Scan live markets";
+    setupScan(lastResult, true);
+  }
+});
+
+function renderScan(j, forced) {
+  $("scan-out").hidden = false;
+  $("scan-banner").hidden = !forced && !j.forced;
+  const rows = j.rows || [];
+  $("scan-meta").textContent = `${j.generated || ""} · looked at ${j.considered ?? "?"} markets, fingerprinted ${j.scanned ?? rows.length}. Showing the ${rows.length} closest.`;
+  const head = `<div class="scan-tr scan-hd" role="row"><span>Side</span><span>Pair</span><span>Limit</span><span>TP</span><span>SL</span><span>Score</span><span>From price</span></div>`;
+  $("scan-table").innerHTML = rows.length ? head + rows.map(r =>
+    `<div class="scan-tr" role="row"><span class="side-${r.side}">${esc((r.side || "").toUpperCase())}</span>` +
+    `<span>${esc(r.market_id)}</span><span>${px(r.entry)}</span><span>${px(r.tp)}</span><span>${px(r.sl)}</span>` +
+    `<span>${Number(r.score).toFixed(1)}</span>` +
+    `<span>${r.dist_pct ?? "-"}% / ${r.dist_atr ?? "-"} ATR${r.through_entry ? " · through entry" : ""}</span></div>`
+  ).join("") : `<p class="muted">No live matches.</p>`;
+  $("scan-cards").innerHTML = rows.map(r =>
+    `<div class="scan-card"><div class="scan-side side-${r.side}">${esc((r.side || "").toUpperCase())} ${esc(r.symbol || r.market_id)}</div>` +
+    `<div>Limit ${px(r.entry)}</div><div>TP ${px(r.tp)}</div><div>SL ${px(r.sl)}</div>` +
+    `<div class="scan-sc">score ${Number(r.score).toFixed(1)}</div>` +
+    `<div class="muted">${r.dist_pct ?? "-"}% from price${r.through_entry ? " · already through entry" : ""}</div></div>`
+  ).join("");
+}
 
 // ---------- compare on other pairs
 const CMP_LIMIT = 5;
@@ -443,10 +590,16 @@ function applyQuery() {
   if (q.get("days")) { $("days").value = q.get("days"); $("days-v").textContent = $("days").value; }
   if (q.get("expiry")) $("expiry").value = q.get("expiry");
   if (q.get("trend") === "1") $("trend").checked = true;
-  if (q.get("mode") === "pattern") $("mode").querySelector("[data-mode=pattern]").click();
+  if (["similar", "every-close", "pattern"].includes(q.get("mode"))) {
+    const btn = $("mode").querySelector(`[data-mode="${q.get("mode")}"]`);
+    if (btn) btn.click();
+  }
   if (q.get("zone_tf")) $("zone-tf").value = q.get("zone_tf");
+  if (q.get("similar_tf")) $("similar-tf").value = q.get("similar_tf");
+  if (q.get("similar_bars")) $("similar-bars").value = q.get("similar_bars");
   if (["limit", "sweep", "confirm"].includes(q.get("entry_style"))) $("entry-style").value = q.get("entry_style");
   if (q.get("insights") === "0") $("insights").checked = false;
+  if (q.get("insights") === "1") $("insights").checked = true;
   updateRR();
   if (q.get("run") === "1") run();
 }

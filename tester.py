@@ -839,6 +839,19 @@ def text_report(out):
              replayed_as(g, p, hold),
              f"Zones found in window: {z['zones_found']} (touched {z['zones_touched']}, invalidated {z['zones_invalidated']}); "
              f"zones traded (filled): {z['zones_traded']}.", ""]
+    elif p.get("mode") == "similar":
+        q = out.get("query") or {}
+        qt = fmt_ts(q["t"]) if q.get("t") else "n/a"
+        L = [f"Setup test (SIMILAR mode): {g['side'].upper()} {m['market_id']}  {head}",
+             f"Your setup: entry {g['entry']:g} ({g['entry_type']}), TP {g['tp']:g}, SL {g['sl']:g}, R:R 1:{g['rr']:.2f}. "
+             f"Price now {g['ref']:g}, 4h ATR {g['atr']:.4g}.",
+             f"Fingerprinted the {p.get('similar_bars', 24)} x {p.get('similar_tf', '1h')} bars ending {qt} (setup moment), "
+             f"scale-free path plus trend, volatility, swings and impulse. "
+             f"Searched the past for up to {p.get('similar_k', 30)} closest non-overlapping windows, then placed "
+             f"entry {g['entry_atr']:+.2f} ATR from that window's close, stop {g['risk_atr']:.2f} ATR, "
+             f"target {g['reward_atr']:.2f} ATR (scaled by {p['geometry']}). "
+             f"One order at a time, expiry {p['expiry']}" + hold
+             + (", only when 4h EMA50 slope agrees" if p['trend_filter'] else "") + ".", ""]
     else:
         L = [f"Setup test: {g['side'].upper()} {m['market_id']}  {head}",
              f"Setup: entry {g['entry']:g} ({g['entry_type']}), TP {g['tp']:g}, SL {g['sl']:g}, R:R 1:{g['rr']:.2f}. "
@@ -850,8 +863,11 @@ def text_report(out):
     L += result_lines(s, p)
     if p["trend_filter"]:
         L.append(f"Trend filter skipped {out['skipped_by_trend']} eligible closes. Trend now: {out['trend_now']}.")
-    if p.get("mode") != "pattern" and abs(g["entry_atr"]) > 3:
+    if p.get("mode") not in ("pattern", "similar") and abs(g["entry_atr"]) > 3:
         L.append(f"Warning: entry is {abs(g['entry_atr']):.1f} ATR from current price, so most replays will not fill. Check the levels.")
+    if out.get("similar_matches"):
+        import similar as _sim
+        L += [""] + _sim.similar_matches_lines(out["similar_matches"])
     if out["data"].get("provenance_text"):
         L += ["", out["data"]["provenance_text"]]
     L += ["", f"Verdict: {s['verdict']}.",
@@ -878,6 +894,28 @@ def basket_report(out):
         L.append(f"  {r['market']['market_id']}: {r['data'].get('provenance_text', '')}")
     L += ["", f"Verdict (pooled): {s['verdict']}.", "Backtest on past candles only. Not a prediction, not advice."]
     return "\n".join(L)
+
+
+def parse_similar_at(s):
+    """Optional setup moment: int/float ms, or YYYY-MM-DD / YYYY-MM-DDTHH:MM in WAT (UTC+1)."""
+    if s in (None, ""):
+        return None
+    if isinstance(s, (int, float)):
+        return int(s)
+    s = str(s).strip()
+    if s.isdigit():
+        return int(s)
+    import datetime as _dt
+    wat = _dt.timezone(_dt.timedelta(hours=1))
+    for fmt in ("%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+        try:
+            d = _dt.datetime.strptime(s, fmt)
+            if d.tzinfo is None:
+                d = d.replace(tzinfo=wat)
+            return int(d.timestamp() * 1000)
+        except ValueError:
+            continue
+    raise SystemExit("--similar-at must be UTC ms, YYYY-MM-DD, or YYYY-MM-DDTHH:MM (WAT)")
 
 
 def parse_dur(s):
@@ -1099,7 +1137,7 @@ def _extra_markets(basket, markets):
     return parse_basket(basket, markets)
 
 
-def run_market(m, a, g_user, mode, end_ms, start_ms, warm, expiry, sl_buffer, sl_src, zone_params):
+def run_market(m, a, g_user, mode, end_ms, start_ms, warm, expiry, sl_buffer, sl_src, zone_params, query=None):
     """Run one market. g_user is the user's setup; other markets get the same shape in ATR units."""
     base = fetch_candles(m, a.interval, start_ms - warm, end_ms, refresh=a.refresh)
     if len(base) < 200:
@@ -1122,8 +1160,19 @@ def run_market(m, a, g_user, mode, end_ms, start_ms, warm, expiry, sl_buffer, sl
     common = dict(fee_pct=fee, swap_pct_day=swap, start_ms=start_ms, sweep_atr=a.sweep_atr,
                   sweep_window_ms=parse_dur(a.sweep_window) if a.sweep_window else None,
                   max_hold_ms=None if str(a.max_hold).lower() == "none" else parse_dur(a.max_hold))
-    zstats = zlist = None
-    if mode == "pattern":
+    zstats = zlist = matches = q_used = None
+    if mode == "similar":
+        import similar as S
+        tf = getattr(a, "similar_tf", "1h") or "1h"
+        n = int(getattr(a, "similar_bars", 24) or 24)
+        k = int(getattr(a, "similar_k", 30) or 30)
+        trades, skipped, matches, q_used = S.replay_similar(
+            base, g, tf=tf, n=n, k=k, expiry_ms=expiry, start_ms=start_ms, end_ms=end_ms,
+            trend_filter=a.trend_filter, interval=a.interval, query=query, exclude_query=True,
+            fee_pct=fee, swap_pct_day=swap,
+            sweep_window_ms=common["sweep_window_ms"], sweep_atr=common["sweep_atr"],
+            max_hold_ms=common["max_hold_ms"])
+    elif mode == "pattern":
         style = getattr(a, "entry_style", "limit") or "limit"
         if style == "limit":
             trades, skipped, zones, zstats = replay_pattern(
@@ -1154,6 +1203,10 @@ def run_market(m, a, g_user, mode, end_ms, start_ms, warm, expiry, sl_buffer, sl
                skipped_by_trend=skipped, trend_now=trend_now, result=s)
     if zstats is not None:
         out["zones"] = dict(zstats, list=zlist)
+    if matches is not None:
+        import similar as S
+        out["similar_matches"] = matches
+        out["query"] = S.public_query(q_used or query)
     return out, trades
 
 
@@ -1164,8 +1217,9 @@ def main(argv=None):
     ap.add_argument("--entry", required=True, help="price, or +-x%% from current price")
     ap.add_argument("--tp", required=True, help="price, +-x%% from entry, or NR")
     ap.add_argument("--sl", required=True, help="price or +-x%% from entry")
-    ap.add_argument("--mode", choices=["every-close", "pattern"], default="every-close",
+    ap.add_argument("--mode", choices=["every-close", "pattern", "similar"], default="every-close",
                     help="every-close (default): the setup shape at every 4h close when flat. "
+                         "similar: fingerprint the last N candles at the setup moment and replay on the closest past windows. "
                          "pattern: only at fresh supply/demand zones found by rule on --zone-tf candles")
     ap.add_argument("--days", type=int, default=90, help="test window in days (default 90; +14d warm-up is loaded before it)")
     ap.add_argument("--no-backups", action="store_true", help="MFP feed only, no backfill from OKX/Bybit/Yahoo/Dukascopy")
@@ -1202,12 +1256,32 @@ def main(argv=None):
     ap.add_argument("--compare", default=None,
                     help="rerun the same setup (ATR-scaled) on up to 5 other markets and compare them, "
                          "e.g. GBPUSD,AUDUSD,USDJPY,USDCAD,USDCHF. Cannot be combined with --basket")
+    ap.add_argument("--similar-tf", default="1h", choices=["15m", "30m", "1h", "4h"],
+                    help="similar: timeframe of the fingerprint path (default 1h)")
+    ap.add_argument("--similar-bars", type=int, default=24,
+                    help="similar: number of candles in the fingerprint (default 24)")
+    ap.add_argument("--similar-k", type=int, default=30,
+                    help="similar: max non-overlapping historical matches per market (default 30)")
+    ap.add_argument("--similar-at", default=None,
+                    help="similar: setup moment as UTC ms, or YYYY-MM-DD or YYYY-MM-DDTHH:MM in WAT (UTC+1). "
+                         "Default: last time price traded at --entry")
+    ap.add_argument("--scan", action="store_true",
+                    help="after a passing backtest (edge or possible edge), scan live markets for similar price action")
+    ap.add_argument("--force-scan", action="store_true",
+                    help="run the live scan even if the backtest did not pass; the report is labelled FORCED")
+    ap.add_argument("--scan-scope", default="family",
+                    help="live scan universe: family (default), all, passed (compare/basket pairs that passed), "
+                         "or a comma list of markets")
     ap.add_argument("--ref", type=float, help="override current price")
     ap.add_argument("--no-fees", action="store_true")
     ap.add_argument("--refresh", action="store_true", help="ignore candle cache")
     ap.add_argument("--json", action="store_true", help="print JSON instead of text")
     ap.add_argument("--json-out", help="also write JSON (with trade list) to this path")
     a = ap.parse_args(argv)
+    if not (8 <= a.similar_bars <= 96):
+        raise SystemExit("--similar-bars must be between 8 and 96")
+    if not (5 <= a.similar_k <= 80):
+        raise SystemExit("--similar-k must be between 5 and 80")
 
     mode = a.mode
     expiry_s = a.expiry or ("30d" if mode == "pattern" else "72h")
@@ -1261,6 +1335,35 @@ def main(argv=None):
     else:
         txt = (text_report(out) if "per_market" not in out
                else (compare_report(out) if a.compare else basket_report(out)))
+    if a.scan or a.force_scan:
+        import similar as S
+        reason = S.gate_reason(out["result"])
+        forced = bool(a.force_scan)
+        if reason and not forced:
+            out["scan"] = dict(gated=True, reason=reason, rows=[], forced=False)
+            if not a.json:
+                txt += f"\n\nScan skipped: {reason}."
+        else:
+            try:
+                scope, kind = S.resolve_scope(a.scan_scope, m, markets, out.get("per_market"))
+            except ValueError as e:
+                raise SystemExit(str(e)) from None
+            q = out.get("query")
+            if q is None:
+                q, *_ = S.query_fingerprint(base, tf=a.similar_tf, n=a.similar_bars,
+                                            end_ms=end_ms, interval=a.interval, entry=e,
+                                            at_ms=parse_similar_at(a.similar_at))
+            if q is None:
+                raise SystemExit("could not fingerprint the setup moment for the live scan")
+            scan = S.scan_live(q, g, scope, interval=a.interval, tf=a.similar_tf, n=a.similar_bars,
+                               trend_filter=a.trend_filter, per_market=out.get("per_market"),
+                               refresh=a.refresh, end_ms=end_ms)
+            scan["forced"] = forced
+            scan["gate_reason"] = reason
+            scan["scope"] = kind
+            out["scan"] = scan
+            if not a.json:
+                txt += "\n\n" + S.scan_report(scan, forced=forced, reason=reason)
     if a.json_out:
         json.dump(dict(out, trades=trades), open(a.json_out, "w"), indent=1)
     print(json.dumps(out, indent=1) if a.json else txt)
@@ -1287,12 +1390,23 @@ def run_setup(a, mode, ctx, sl_buffer, sl_src, basket):
     expiry_s = a.expiry or ("30d" if mode == "pattern" else "72h")
     expiry = parse_dur(expiry_s)
     style = a.entry_style if mode == "pattern" else "limit"
+    query = None
+    if mode == "similar":
+        import similar as S
+        q, *_rest = S.query_fingerprint(ctx["base"], tf=getattr(a, "similar_tf", "1h") or "1h",
+                                        n=int(getattr(a, "similar_bars", 24) or 24),
+                                        end_ms=ctx["end_ms"], interval=a.interval, entry=ctx["e"],
+                                        at_ms=parse_similar_at(getattr(a, "similar_at", None)))
+        if q is None:
+            raise SystemExit("could not fingerprint the setup moment (not enough history on this timeframe)")
+        query = q
+        ctx["query"] = q
     targets = [m] + [x for x in _extra_markets(basket, markets) if x["market_id"] != m["market_id"]]
     runs = []
     for mk in targets:
         try:
             runs.append(run_market(mk, a, g, mode, ctx["end_ms"], ctx["start_ms"], ctx["warm"], expiry, sl_buffer,
-                                   sl_src, ctx["zone_params"]))
+                                   sl_src, ctx["zone_params"], query=query))
         except SystemExit as ex:
             if mk is m:
                 raise
@@ -1312,6 +1426,11 @@ def run_setup(a, mode, ctx, sl_buffer, sl_src, basket):
         if style != "limit":
             params.update(confirm_tf=a.confirm_tf, trigger_window=a.trigger_window or f"12 x {a.zone_tf}",
                           sweep_min_atr=a.sweep_min_atr, sweep_max_atr=a.sweep_max_atr, skip_strong_atr=a.skip_strong_atr)
+    elif mode == "similar":
+        import similar as S
+        params.update(placement="at the closest non-overlapping past windows (ATR-scaled geometry, one order at a time)",
+                      similar_tf=a.similar_tf, similar_bars=int(a.similar_bars), similar_k=int(a.similar_k),
+                      similar_at=getattr(a, "similar_at", None))
     else:
         params.update(placement="every 4h close when flat (one order/trade at a time)")
     head = dict(tool="mfp-setup-tester", generated=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), params=params)
@@ -1326,6 +1445,16 @@ def run_setup(a, mode, ctx, sl_buffer, sl_src, basket):
                    basket=[r[0]["market"]["market_id"] for r in runs], per_market=[r[0] for r in runs], result=pooled)
         if mode == "pattern":
             out["zones"] = {k: sum(r[0]["zones"][k] for r in runs) for k in ("zones_found", "zones_traded", "zones_touched", "zones_invalidated")}
+        if mode == "similar":
+            # keep the source query; concatenate match lists for a pooled view
+            src_id = m["market_id"]
+            src = next((r[0] for r in runs if r[0]["market"]["market_id"] == src_id), runs[0][0])
+            out["query"] = src.get("query")
+            out["similar_matches"] = [dict(x, market=r[0]["market"]["market_id"])
+                                      for r, _tr in runs for x in (r[0].get("similar_matches") or [])]
+    if mode == "similar" and query is not None:
+        import similar as S
+        out["query"] = out.get("query") or S.public_query(query)
     return out, trades
 
 if __name__ == "__main__":
