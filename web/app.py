@@ -5,7 +5,7 @@ Read-only: only MFP public keyless market data. Never places orders, uses no API
 """
 import asyncio, json, os, subprocess, sys, tempfile, threading, time
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, g, jsonify, request, send_from_directory
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ENGINE_DIR = os.path.dirname(HERE)
@@ -14,15 +14,75 @@ import tester  # noqa: E402  (engine: load_markets, resolve_market, _fetch_chunk
 
 RUN_TIMEOUT = int(os.environ.get("TESTER_TIMEOUT", "240"))  # first run of a market may backfill from OKX/Yahoo  # seconds per backtest
 MAX_PARALLEL = int(os.environ.get("TESTER_MAX_PARALLEL", "2"))
+RATE_HEAVY_PER_MIN = int(os.environ.get("RATE_HEAVY_PER_MIN", "6"))
+RATE_HEAVY_CONCURRENT_PER_IP = int(os.environ.get("RATE_HEAVY_CONCURRENT_PER_IP", "1"))
 _run_sem = threading.BoundedSemaphore(MAX_PARALLEL)
 _market_locks, _ml_guard = {}, threading.Lock()  # one run per market at a time (shared candle cache file)
 _price_cache = {}  # market_id -> (ts, payload)
+_rate_guard = threading.Lock()
+_heavy_hits = {}       # ip -> [timestamps] in the last minute
+_heavy_inflight = {}   # ip -> current heavy runs
 
 app = Flask(__name__, static_folder=os.path.join(HERE, "static"), static_url_path="/static")
+app.config["DEBUG"] = False
+app.config["ENV"] = "production"
 
 
 def err(msg, code=400):
     return jsonify(error=msg), code
+
+
+def reset_rate_limits():
+    """Test helper: clear per-IP counters."""
+    with _rate_guard:
+        _heavy_hits.clear()
+        _heavy_inflight.clear()
+
+
+def client_ip():
+    """Prefer the Cloudflare connecting IP only when the request itself is from localhost (the tunnel)."""
+    remote = (request.remote_addr or "").strip()
+    cf = (request.headers.get("CF-Connecting-IP") or "").strip()
+    xff = (request.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+    if remote in ("127.0.0.1", "::1"):
+        return cf or xff or remote or "unknown"
+    return remote or "unknown"
+
+
+def rate_limit_heavy():
+    """Per-IP cap on /api/test, /api/compare and /api/scan. Returns a 429 response or None.
+
+    Call rate_done_heavy() in a finally block if this returns None.
+    """
+    ip = client_ip()
+    g.heavy_ip = ip
+    now = time.time()
+    with _rate_guard:
+        # drop stale hits; also prune idle IPs so the maps cannot grow without bound
+        stale = [k for k, ts in _heavy_hits.items() if not ts or now - ts[-1] >= 60]
+        for k in stale:
+            _heavy_hits.pop(k, None)
+        hits = [t for t in _heavy_hits.get(ip, []) if now - t < 60]
+        if len(hits) >= RATE_HEAVY_PER_MIN:
+            return err("too many tests from your network, try again in a minute", 429)
+        if _heavy_inflight.get(ip, 0) >= RATE_HEAVY_CONCURRENT_PER_IP:
+            return err("a test from your network is already running, wait for it to finish", 429)
+        hits.append(now)
+        _heavy_hits[ip] = hits
+        _heavy_inflight[ip] = _heavy_inflight.get(ip, 0) + 1
+    return None
+
+
+def rate_done_heavy():
+    ip = getattr(g, "heavy_ip", None)
+    if not ip:
+        return
+    with _rate_guard:
+        n = _heavy_inflight.get(ip, 0) - 1
+        if n <= 0:
+            _heavy_inflight.pop(ip, None)
+        else:
+            _heavy_inflight[ip] = n
 
 
 def market_lock(mid):
@@ -273,26 +333,38 @@ def compare_suggest():
 
 @app.post("/api/test")
 def run_test():
-    d = request.get_json(silent=True)
+    limited = rate_limit_heavy()
+    if limited:
+        return limited
     try:
-        p = parse_test_body(d, require_compare=False)
-    except ValueError as e:
-        return err(str(e))
-    return run_engine(p, compare=False, timeout=RUN_TIMEOUT)
+        d = request.get_json(silent=True)
+        try:
+            p = parse_test_body(d, require_compare=False)
+        except ValueError as e:
+            return err(str(e))
+        return run_engine(p, compare=False, timeout=RUN_TIMEOUT)
+    finally:
+        rate_done_heavy()
 
 
 @app.post("/api/compare")
 def run_compare():
-    d = request.get_json(silent=True)
+    limited = rate_limit_heavy()
+    if limited:
+        return limited
     try:
-        p = parse_test_body(d, require_compare=True)
-    except ValueError as e:
-        return err(str(e))
-    # no insights: each insights run multiplies work by ~8; compare already runs up to 6 markets
-    p["want_insights"] = False
-    n = 1 + len(p["extras"])
-    timeout = int(os.environ.get("COMPARE_TIMEOUT", str(max(RUN_TIMEOUT, 120 * n))))
-    return run_engine(p, compare=True, timeout=timeout)
+        d = request.get_json(silent=True)
+        try:
+            p = parse_test_body(d, require_compare=True)
+        except ValueError as e:
+            return err(str(e))
+        # no insights: each insights run multiplies work by ~8; compare already runs up to 6 markets
+        p["want_insights"] = False
+        n = 1 + len(p["extras"])
+        timeout = int(os.environ.get("COMPARE_TIMEOUT", str(max(RUN_TIMEOUT, 120 * n))))
+        return run_engine(p, compare=True, timeout=timeout)
+    finally:
+        rate_done_heavy()
 
 
 SCAN_TIMEOUT = int(os.environ.get("SCAN_TIMEOUT", "180"))
@@ -301,6 +373,16 @@ SCAN_TIMEOUT = int(os.environ.get("SCAN_TIMEOUT", "180"))
 @app.post("/api/scan")
 def run_scan():
     """Fingerprint each market's latest window against the setup moment. Gated unless force=true."""
+    limited = rate_limit_heavy()
+    if limited:
+        return limited
+    try:
+        return _run_scan()
+    finally:
+        rate_done_heavy()
+
+
+def _run_scan():
     import similar as S
     d = request.get_json(silent=True) or {}
     try:
@@ -373,8 +455,8 @@ def run_scan():
 
 
 if __name__ == "__main__":
-    host = os.environ.get("HOST", "0.0.0.0")
+    host = os.environ.get("HOST", "127.0.0.1")
     port = int(os.environ.get("PORT", "8080"))
     from waitress import serve
     print(f"CHRONOS on http://{host}:{port}", flush=True)
-    serve(app, host=host, port=port, threads=8)
+    serve(app, host=host, port=port, threads=8, ident="CHRONOS")

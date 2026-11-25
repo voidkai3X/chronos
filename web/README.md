@@ -13,16 +13,20 @@ From `chronos/web/`:
 ```
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-.venv/bin/python app.py                 # serves http://0.0.0.0:8080
+.venv/bin/python app.py                 # serves http://127.0.0.1:8080
 ```
 
 Environment variables:
 - `PORT`: default 8080
-- `HOST`: default 0.0.0.0
+- `HOST`: default 127.0.0.1 (localhost only; set `0.0.0.0` if you need LAN access)
 - `TESTER_TIMEOUT`: seconds per backtest, default 240
 - `COMPARE_TIMEOUT`: seconds for a compare run (up to 6 markets); default is `max(TESTER_TIMEOUT, 120 * markets)`
 - `SCAN_TIMEOUT`: seconds budget note for a live scan, default 180
-- `TESTER_MAX_PARALLEL`: concurrent backtests, default 2
+- `TESTER_MAX_PARALLEL`: global cap on concurrent engine runs, default 2
+- `RATE_HEAVY_PER_MIN`: max `/api/test`, `/api/compare` and `/api/scan` calls per client IP per minute, default 6
+- `RATE_HEAVY_CONCURRENT_PER_IP`: max concurrent heavy runs per client IP, default 1
+
+A public or shared link can otherwise pile up engine runs on the box. Heavy endpoints return 429 when either per-IP cap is hit, or when the global engine cap is busy. The client IP is `request.remote_addr`, except that `CF-Connecting-IP` (or `X-Forwarded-For`) is trusted only when the request itself comes from localhost (the tunnel). Debug mode is off. There are no debug or admin endpoints and no API keys.
 
 Candles are cached in `../candle_cache/` (shared with the CLI). The first run on a market fetches about 74 days of 15m bars and takes a few seconds to a minute. Repeat runs take under a second.
 

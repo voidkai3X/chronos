@@ -275,6 +275,8 @@ Output includes orders, fills, unfilled orders, TP, SL and time exits; win rate 
 
 `python tests/test_similar.py` runs offline checks for similar mode: the path is scale-free (a 2x-scaled copy stays close); fingerprints are causal (later bars cannot change an earlier window); overlapping matches are dropped; the query window itself is not traded; results sort by distance; live levels keep the same ATR shape and R:R; and the live-scan gate only opens for a possible or proven edge.
 
+`python tests/test_rate_limit.py` runs offline checks for the web rate limiter: 6 heavy requests per IP per minute then 429; compare/scan share that budget; a second concurrent heavy run from the same IP is rejected; the slot is released afterwards; `CF-Connecting-IP` is trusted only from localhost; and `/` and `/api/health` are not limited.
+
 `python tests/test_compare.py` runs offline checks for `--compare`: more than 5 other markets is rejected; transferred levels keep the same ATR shape and R:R at a different price and ATR; pooled closed trades, TP/SL/time exits and total R match the concatenated trade list; and the one-line summary counts only the other pairs.
 
 `python tests/test_entries.py` runs offline checks for the sweep and confirm entries:
