@@ -46,6 +46,11 @@ def client_ip():
     xff = (request.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
     if remote in ("127.0.0.1", "::1"):
         return cf or xff or remote or "unknown"
+    if os.environ.get("TRUST_PROXY") == "1":
+        # Behind Render's proxy: the right-most X-Forwarded-For entry is the one the proxy added (not spoofable).
+        hops = [h.strip() for h in (request.headers.get("X-Forwarded-For") or "").split(",") if h.strip()]
+        if hops:
+            return hops[-1]
     return remote or "unknown"
 
 
