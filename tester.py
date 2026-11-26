@@ -717,7 +717,10 @@ def replay_pattern_triggered(base, g, entry_style, zone_tf="4h", confirm_tf="15m
                                               zones_invalidated=sum(1 for z in in_window if z["dead"] < z["known"] + zone_max_age_ms))
 
 
-def summarize(trades, g, min_samples=20):
+MIN_SAMPLES = 15  # closed trades needed before a verdict counts
+
+
+def summarize(trades, g, min_samples=MIN_SAMPLES):
     closed = [t for t in trades if t["status"] in ("tp", "sl", "time")]
     fills = [t for t in trades if "filled" in t]
     tp = sum(t["status"] == "tp" for t in closed)

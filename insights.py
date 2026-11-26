@@ -10,7 +10,7 @@ import copy
 
 import tester as T
 
-MIN_N = 20            # closed trades needed before a number counts as evidence (same as the engine's verdict)
+MIN_N = 15            # closed trades needed before a number counts as evidence (same as the engine's verdict)
 WIDE_EXTRA_ATR = 0.5  # the "wider stop" variant adds this much zone-tf ATR beyond the zone
 EDGE_STOP_ATR = 0.5   # a stop closer than this beyond the zone's far edge counts as a zone-edge stop
 USER_MIN_RR = 2.8     # the user's own rule; reported, never enforced
@@ -239,7 +239,7 @@ def text(ins):
         L.append(f"  {r['variant']:<28} {r['scope']:<16} {r['sl_buffer_atr']:>5.2f} {r['closed']:>6} {r['tp']:>3} {r['sl']:>3} "
                  f"{r['time_exits']:>4} {_pct(r['win_rate']):>4} {_pct(r['breakeven_win_rate']):>4} {r['avg_r_net']:>+6.2f} "
                  f"{r['total_r_net']:>+6.1f} {('%.1f' % r['t_stat']) if r['t_stat'] is not None else 'n/a':>5}  "
-                 + ("ok (>=20, above BE)" if r["eligible"] else f"too few (<{ins['min_closed']})" if r["closed"] < ins["min_closed"]
+                 + (f"ok (>={ins['min_closed']}, above BE)" if r["eligible"] else f"too few (<{ins['min_closed']})" if r["closed"] < ins["min_closed"]
                     else "below BE / no edge"))
     L += ["", ins["best"]["text"], "", "SUGGESTED FIXES"]
     for f in ins["fixes"] or [dict(fix="No specific fix: nothing in this result tripped a rule.", evidence=[])]:

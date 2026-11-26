@@ -196,7 +196,7 @@ The app is a thin wrapper around `tester.py`. It calls the engine with `--json -
    | Forex | 0.0025% | 0.005% |
 
 5. **Stop-sweep check.** For each stop-out, the engine checks whether price still reached the TP within the window, and how far past the stop it went first. If at least 20% of losers went no more than 1 ATR past the stop and then hit TP, the tool flags "stop too tight".
-6. A verdict needs at least 20 closed trades. Below that, the result is `too few samples`. Other verdicts: `no edge` (expectancy at or below 0 after fees), `possible edge, not proven` (t < 2), `edge on this sample`.
+6. A verdict needs at least 15 closed trades. Below that, the result is `too few samples`. Other verdicts: `no edge` (expectancy at or below 0 after fees), `possible edge, not proven` (t < 2), `edge on this sample`.
 
 ### Pattern mode
 
@@ -227,7 +227,7 @@ The app is a thin wrapper around `tester.py`. It calls the engine with `--json -
 
 ### Compare on other pairs (`--compare`)
 
-After testing a setup on one market, `--compare M1,M2,...` reruns the same side, mode, entry style, R:R and stop/target (scaled by each market's own 4h ATR, the same transfer `--basket` uses) on up to 5 other markets. More than 5 names is rejected. The report lists the source market and each other pair (closed trades, win rate vs break-even, average R, total R, TP/SL/time exits, verdict, data source and days), a pooled row over all of them, and a one-line summary such as `works on 1 of 5, pooled no edge`. "Works" here means the engine's verdict was a possible edge or an edge on that sample (at least 20 closed trades and positive average R after fees). Suggestions in the web app default to the same family: FX majors for FX, other crypto perps for crypto, indices for indices, metals and energy for commodities (equities otherwise).
+After testing a setup on one market, `--compare M1,M2,...` reruns the same side, mode, entry style, R:R and stop/target (scaled by each market's own 4h ATR, the same transfer `--basket` uses) on up to 5 other markets. More than 5 names is rejected. The report lists the source market and each other pair (closed trades, win rate vs break-even, average R, total R, TP/SL/time exits, verdict, data source and days), a pooled row over all of them, and a one-line summary such as `works on 1 of 5, pooled no edge`. "Works" here means the engine's verdict was a possible edge or an edge on that sample (at least 15 closed trades and positive average R after fees). Suggestions in the web app default to the same family: FX majors for FX, other crypto perps for crypto, indices for indices, metals and energy for commodities (equities otherwise).
 
 ### Entry styles (pattern mode)
 
@@ -245,7 +245,7 @@ All three use the same zones, the same 15m fill and exit engine, the same fees a
 
 | Rule | Fires when | Says |
 |---|---|---|
-| sample | fewer than 20 closed trades | too few to judge; use a basket or a longer window |
+| sample | fewer than 15 closed trades | too few to judge; use a basket or a longer window |
 | swept | at least 30% of 3+ stop-outs later reached TP within the window | stops are getting swept; wait for the sweep or put the SL beyond liquidity |
 | fills | fill rate under 40% | entry rarely reached (limit too far, or zone rarely retested, or trigger rarely seen) |
 | far | every-close entry more than 3 x 4h ATR from price | far limit = bet on a retest; test in pattern mode |
@@ -256,7 +256,7 @@ All three use the same zones, the same 15m fill and exit engine, the same fees a
 | edge_stop | SL less than 0.5 x zone ATR beyond the zone's far edge | warns against zone-edge stops (your own rule) |
 | streak / rr | long losing streak; R:R below your 1:2.8 rule | information only. R:R is reported, never enforced |
 
-**What-if comparison.** The setup is re-run, on the same window and in pattern mode, as four variants: blind limit, limit with the SL 0.5 ATR further beyond the zone, sweep entry, and confirm entry. Each runs on the single market and on a basket (`--basket` if given, otherwise all FX pairs for an FX market) to get more trades. A variant is only named as "best" if it has at least 20 closed trades, a win rate above break-even and a positive average R after fees. Even then, the text warns that the best of 8 tries on the same data overstates its edge (multiple comparisons). Otherwise it says the evidence is insufficient. The insights never say a setup will win.
+**What-if comparison.** The setup is re-run, on the same window and in pattern mode, as four variants: blind limit, limit with the SL 0.5 ATR further beyond the zone, sweep entry, and confirm entry. Each runs on the single market and on a basket (`--basket` if given, otherwise all FX pairs for an FX market) to get more trades. A variant is only named as "best" if it has at least 15 closed trades, a win rate above break-even and a positive average R after fees. Even then, the text warns that the best of 8 tries on the same data overstates its edge (multiple comparisons). Otherwise it says the evidence is insufficient. The insights never say a setup will win.
 
 The web app shows this as an **Insights** panel under the result cards: findings, the comparison table, the best-variant line, **Suggested fixes** with the tested numbers behind each fix, and a disclaimer. It is on by default and can be switched off with the "Insights" checkbox.
 
@@ -303,7 +303,7 @@ Output includes orders, fills, unfilled orders, TP, SL and time exits; win rate 
 - Pattern mode's zones are a **rule-based approximation** of the zones a trader draws by eye. It does not see liquidity sweeps, BOS confirmation, equal highs and lows, efficiency or imbalance, or higher-timeframe context. It may miss zones you would take and take zones you would skip. Your own chart zone may not match any detected zone; see "Default stop buffer" above.
 - The sweep and confirm entries are mechanical rules: the "liquidity" is the zone's far edge, and the swing is a 2-bar fractal on 15m. They do not see equal highs and lows, session highs, or higher-timeframe context, and confirm-tf candles finer than the 15m data (5m) need `--interval 5m`.
 - Even with 90 days of data, sweep and confirm on one market give only a handful of trades. The what-if comparison tries 8 variants on the same data, so any "best" one is partly luck. It is evidence to forward-test, not a fix.
-- With 90 days of data, a single market still gives only a handful of fresh zones (AUD/USD: 33 on 30m; EUR/USD: 9 on 4h). Use `--basket` to reach 20+ trades, but pooling assumes the pattern behaves the same across pairs.
+- With 90 days of data, a single market still gives only a handful of fresh zones (AUD/USD: 33 on 30m; EUR/USD: 9 on 4h). Use `--basket` to reach 15+ trades, but pooling assumes the pattern behaves the same across pairs.
 - The zone rule's defaults were chosen before looking at results and were not optimised. Changing them and keeping whichever looks best would be curve-fitting on a tiny sample.
 - One trade at a time gives about 15–45 trades in 90 days. Most single setups will read "too few samples". Treat any result under about 50 trades as a rough check, not proof.
 - 15m candles cannot show the order of moves inside a bar. The tie rules always assume the worse case.

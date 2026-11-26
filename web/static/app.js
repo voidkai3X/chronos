@@ -244,7 +244,7 @@ function renderInsights(ins) {
   $("ins-list").innerHTML = ins.findings.map(f => `<li class="${f.level === "warn" ? "w" : "i"}">${esc(f.text)}</li>`).join("");
   $("ins-note").textContent = ins.comparison_note;
   $("ins-tbl").querySelector("tbody").innerHTML = ins.comparison.map(r => {
-    const ev = r.eligible ? `<span class="tag tp">20+ trades, above BE</span>`
+    const ev = r.eligible ? `<span class="tag tp">15+ trades, above BE</span>`
       : r.closed < ins.min_closed ? `<span class="tag unf">too few (&lt;${ins.min_closed})</span>` : `<span class="tag sl">below BE / no edge</span>`;
     return `<tr><td>${esc(r.variant)}</td><td>${esc(r.scope)}</td><td class="r">${r.sl_buffer_atr.toFixed(2)} ATR</td><td class="r">${r.closed}</td>` +
       `<td class="r">${r.tp}/${r.sl}/${r.time_exits}</td><td class="r">${pct(r.win_rate)}</td><td class="r">${pct(r.breakeven_win_rate)}</td>` +

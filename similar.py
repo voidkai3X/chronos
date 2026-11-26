@@ -371,7 +371,7 @@ def _bisect_left(xs, t):
 
 
 def verdict_qualifies(result):
-    """Edge or possible-edge: 20+ closed trades and positive average R after fees."""
+    """Edge or possible-edge: 15+ closed trades and positive average R after fees."""
     return T.pair_works(result)
 
 
