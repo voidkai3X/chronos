@@ -335,3 +335,7 @@ The `*_90d.*` files are the 90-day reruns with insights, made 24 Nov 2026 23:40 
 - Insights: optional AI rewording, limited to numbers the engine already produced. The rule-based layer is done.
 
 Hosting is intentionally not part of this push.
+
+## License
+
+Copyright (c) 2026 VOIDKAI. All rights reserved. The code is public for review only; see [LICENSE](LICENSE). Copying, hosting or reusing it requires written permission.
