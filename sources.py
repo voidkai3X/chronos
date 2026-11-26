@@ -16,7 +16,7 @@ is within 5% of 1 (or a known contract multiplier); otherwise the backup is reje
   python3 sources.py coverage [--days 90]     # map every MFP market to its backups, probe live, write data_sources.json
   python3 sources.py show EURUSD [--days 90]  # merged provenance for one market
 """
-import asyncio, bisect, json, lzma, os, pickle, statistics, struct, sys, threading, time, urllib.error, urllib.request
+import asyncio, bisect, json, lzma, os, pickle, random, re, statistics, struct, sys, threading, time, urllib.error, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -31,6 +31,87 @@ MAX_BASIS = 0.05
 MIN_OVERLAP_BARS = 20
 SOURCE_LABEL = {"mfp": "MFP feed", "okx": "OKX perp", "bybit": "Bybit perp", "hyperliquid": "Hyperliquid perp",
                 "yahoo": "Yahoo Finance (not a perp)", "dukascopy": "Dukascopy CFD feed (not a perp)"}
+BUSY_MSG = "Price data source is busy, try again in a minute"
+MFP_CONNECT_TRIES = 5
+MFP_MAX_INFLIGHT = 2  # was 4; softer on shared egress IPs (e.g. Render)
+RECENT_TTL_S = int(os.environ.get("CHRONOS_CACHE_TTL_S", "180"))  # skip re-fetch of recent bars for a few minutes
+
+
+class SourceBusy(RuntimeError):
+    """The market-data source refused or could not be reached after retries. Safe to show as BUSY_MSG."""
+
+
+def _exc_status(exc):
+    for obj in (exc, getattr(exc, "response", None)):
+        if obj is None:
+            continue
+        for attr in ("status_code", "status"):
+            v = getattr(obj, attr, None)
+            if isinstance(v, int):
+                return v
+    m = re.search(r"HTTP\s+(\d{3})", str(exc))
+    return int(m.group(1)) if m else None
+
+
+def _retry_after_header(exc):
+    resp = getattr(exc, "response", None)
+    headers = getattr(resp, "headers", None) if resp is not None else None
+    if not headers:
+        return None
+    try:
+        raw = headers.get("Retry-After") or headers.get("retry-after")
+    except Exception:
+        return None
+    if raw is None or raw == "":
+        return None
+    try:
+        return max(0.0, float(raw))
+    except (TypeError, ValueError):
+        return None
+
+
+def is_retryable_mfp(exc):
+    if not isinstance(exc, BaseException):
+        exc = RuntimeError(str(exc))
+    if isinstance(exc, SourceBusy):
+        return True
+    code = _exc_status(exc)
+    if code in (408, 425, 429, 500, 502, 503, 504):
+        return True
+    if code is not None and 400 <= code < 500:
+        return False
+    if isinstance(exc, (TimeoutError, asyncio.TimeoutError, ConnectionError, OSError, EOFError)):
+        return True
+    name = type(exc).__name__
+    if name in {"InvalidStatus", "InvalidHandshake", "ConnectionClosed", "ConnectionClosedError",
+                "PayloadTooBig"}:
+        return True
+    s = str(exc).lower()
+    return any(x in s for x in ("http 429", "rejected websocket", "rate limit", "too many requests",
+                                "temporarily unavailable", "connection reset"))
+
+
+def friendly_source_error(exc_or_text):
+    """If this looks like a refused/rate-limited/down market-data source, return the public message; else None."""
+    if isinstance(exc_or_text, SourceBusy):
+        return BUSY_MSG
+    s = str(exc_or_text or "")
+    if is_retryable_mfp(exc_or_text if isinstance(exc_or_text, BaseException) else RuntimeError(s)):
+        return BUSY_MSG
+    low = s.lower()
+    if any(x in low for x in ("invalidstatus", "http 429", "rejected websocket", "rate limit",
+                              "too many requests", "price data source is busy")):
+        return BUSY_MSG
+    return None
+
+
+def backoff_seconds(exc, attempt):
+    """Exponential backoff with jitter. Respects Retry-After when the error carries it. attempt is 0-based."""
+    delay = min(8.0, 0.6 * (2 ** attempt))
+    ra = _retry_after_header(exc)
+    if ra is not None:
+        delay = max(delay, min(ra, 20.0))
+    return delay + random.uniform(0.05, 0.4)
 
 
 # ---------------------------------------------------------------- http
@@ -60,57 +141,93 @@ def _closed(t, step, now_ms):
 
 # ---------------------------------------------------------------- adapters: fetch(symbol, interval, start, end) -> {t: bar}
 def fetch_mfp(symbol, interval, start, end):
-    """symbol = 'provider|coin'. Public keyless WebSocket, 900-bar chunks, max 4 in flight."""
+    """symbol = 'provider|coin'. Public keyless WebSocket, 900-bar chunks, one connection, few in flight."""
     provider, coin = symbol.split("|", 1)
-    step = STEP[interval]
-    windows, c = [], start
+    return asyncio.run(_mfp_chunks(provider, coin, interval, _mfp_windows(start, end, interval)))
+
+
+def _mfp_windows(start, end, interval):
+    step, windows, c = STEP[interval], [], start
     while c < end:
         e = min(end, c + 900 * step)
         windows.append((c, e))
         c = e
-    if not windows:
-        return {}
-    return asyncio.run(_mfp_chunks(provider, coin, interval, windows))
+    return windows
 
 
 MFP_WS = "wss://api-stream.myfundedperpetuals.com/v1/market-data"
 
 
-async def _mfp_chunks(provider, coin, interval, windows):
+def _mfp_connect_cm(connect_factory=None):
     import websockets
-    out, sem = {}, asyncio.Semaphore(4)
-    async with websockets.connect(MFP_WS, compression="deflate", open_timeout=15, max_size=2 ** 25) as ws:
-        pending = {}
+    if connect_factory is not None:
+        return connect_factory()
+    return websockets.connect(MFP_WS, compression="deflate", open_timeout=15, max_size=2 ** 25)
 
-        async def reader():
-            while True:
-                f = json.loads(await asyncio.wait_for(ws.recv(), 30))
-                fut = pending.pop(f.get("id"), None)
-                if fut and not fut.done():
-                    fut.set_result(f)
 
-        async def one(i, s, e):
-            async with sem:
-                fut = asyncio.get_event_loop().create_future()
-                pending[i] = fut
-                await ws.send(json.dumps({"op": "req", "id": i, "method": "candles.history",
-                                          "payload": {"provider": provider, "symbol": coin, "interval": interval,
-                                                      "limit": 1000, "startTime": s, "endTime": e}}))
-                f = await asyncio.wait_for(fut, 40)
-                if f.get("op") == "err":
-                    raise RuntimeError(f"MFP error: {f}")
-                for x in f.get("result") or []:
-                    t = int(x["openTime"])
-                    if x.get("isFinal", True) and s <= t < e:
-                        out[t] = (t, float(x["open"]), float(x["high"]), float(x["low"]), float(x["close"]))
+async def _mfp_chunks_on(ws, provider, coin, interval, windows):
+    """Send every history window on one already-open socket. Never opens a second connection."""
+    out, sem, pending = {}, asyncio.Semaphore(MFP_MAX_INFLIGHT), {}
 
-        rd = asyncio.create_task(reader())
-        try:  # hard cap so a stalled socket can't hang a run
-            await asyncio.wait_for(asyncio.gather(*(one(i, s, e) for i, (s, e) in enumerate(windows, 1))),
-                                   60 + 15 * len(windows))
-        finally:
-            rd.cancel()
+    async def reader():
+        while True:
+            f = json.loads(await asyncio.wait_for(ws.recv(), 30))
+            fut = pending.pop(f.get("id"), None)
+            if fut and not fut.done():
+                fut.set_result(f)
+
+    async def one(i, s, e):
+        async with sem:
+            fut = asyncio.get_running_loop().create_future()
+            pending[i] = fut
+            await ws.send(json.dumps({"op": "req", "id": i, "method": "candles.history",
+                                      "payload": {"provider": provider, "symbol": coin, "interval": interval,
+                                                  "limit": 1000, "startTime": s, "endTime": e}}))
+            f = await asyncio.wait_for(fut, 40)
+            if f.get("op") == "err":
+                raise RuntimeError(f"MFP error: {f}")
+            for x in f.get("result") or []:
+                t = int(x["openTime"])
+                if x.get("isFinal", True) and s <= t < e:
+                    out[t] = (t, float(x["open"]), float(x["high"]), float(x["low"]), float(x["close"]))
+
+    rd = asyncio.create_task(reader())
+    try:  # hard cap so a stalled socket can't hang a run
+        await asyncio.wait_for(asyncio.gather(*(one(i, s, e) for i, (s, e) in enumerate(windows, 1))),
+                               60 + 15 * len(windows))
+    finally:
+        rd.cancel()
+        try:
+            await rd
+        except (asyncio.CancelledError, Exception):
+            pass
     return out
+
+
+async def _mfp_chunks(provider, coin, interval, windows, connect_factory=None):
+    """Open the MFP socket (retry 429/connect errors with backoff) and fetch every chunk on that one connection."""
+    if not windows:
+        return {}
+    last = None
+    for attempt in range(MFP_CONNECT_TRIES):
+        cm = _mfp_connect_cm(connect_factory)
+        entered = False
+        try:
+            ws = await cm.__aenter__()
+            entered = True
+            return await _mfp_chunks_on(ws, provider, coin, interval, windows)
+        except Exception as e:
+            last = e
+            if not is_retryable_mfp(e) or attempt == MFP_CONNECT_TRIES - 1:
+                raise SourceBusy(BUSY_MSG) from e
+            await asyncio.sleep(backoff_seconds(e, attempt))
+        finally:
+            if entered:
+                try:
+                    await cm.__aexit__(None, None, None)
+                except Exception:
+                    pass
+    raise SourceBusy(BUSY_MSG) from last
 
 
 OKX_BAR = {"5m": "5m", "15m": "15m", "30m": "30m", "1h": "1H"}
@@ -280,6 +397,34 @@ FETCHERS = {"mfp": fetch_mfp, "okx": fetch_okx, "bybit": fetch_bybit, "hyperliqu
 # ---------------------------------------------------------------- cache (atomic, keyed by source)
 _locks = {}
 _locks_guard = threading.Lock()
+_mem_cache = {}  # (source, symbol, interval, start, end) -> (expires_at, bars)
+_mem_guard = threading.Lock()
+
+
+def reset_mem_cache():
+    """Test helper."""
+    with _mem_guard:
+        _mem_cache.clear()
+
+
+def _mem_get(key):
+    with _mem_guard:
+        hit = _mem_cache.get(key)
+        if hit and hit[0] > time.time():
+            return dict(hit[1])
+        if hit:
+            _mem_cache.pop(key, None)
+    return None
+
+
+def _mem_put(key, bars):
+    with _mem_guard:
+        _mem_cache[key] = (time.time() + RECENT_TTL_S, dict(bars))
+        if len(_mem_cache) > 256:
+            now = time.time()
+            for k, v in list(_mem_cache.items()):
+                if v[0] <= now:
+                    _mem_cache.pop(k, None)
 
 
 def cache_path(source, symbol, interval):
@@ -331,30 +476,65 @@ def _missing(covered, start, end):
     return gaps
 
 
+def _fetch_todos(source, symbol, interval, todo):
+    """Fetch every missing range. MFP uses one WebSocket for all of them (no reconnect per gap)."""
+    if source == "mfp":
+        provider, coin = symbol.split("|", 1)
+        windows = []
+        for s, e in todo:
+            windows.extend(_mfp_windows(s, e, interval))
+        if not windows:
+            return {}
+        return asyncio.run(_mfp_chunks(provider, coin, interval, windows))
+    out = {}
+    for s, e in todo:
+        out.update(FETCHERS[source](symbol, interval, s, e))
+    return out
+
+
 def cached_fetch(source, symbol, interval, start, end, refresh=False):
     """Bars in [start, end) from one source. Requested ranges are remembered (also empty ones) so they are not
-    re-requested; ranges near 'now' are never marked covered, so the latest bars stay fresh."""
+    re-requested; ranges near 'now' are never marked covered for long, so the latest bars stay fresh.
+    A short-lived in-memory + on-disk TTL (RECENT_TTL_S) serves recent bars without hammering the source
+    on repeat runs, compare, or scan."""
+    key = (source, symbol, interval, start, end)
+    if not refresh:
+        hit = _mem_get(key)
+        if hit is not None:
+            return hit
     path = cache_path(source, symbol, interval)
     with _locks_guard:
         lock = _locks.setdefault(path, threading.Lock())
     with lock:
+        if not refresh:
+            hit = _mem_get(key)
+            if hit is not None:
+                return hit
         d = {"v": CACHE_VERSION, "bars": {}, "covered": []} if refresh else _read_cache(path)
         step, now = STEP[interval], int(time.time() * 1000)
         todo = _missing(d["covered"], start, end)
+        # Within the TTL, reuse bars already on disk even for the uncovered 'near now' tail.
+        if todo and not refresh and d.get("fresh_until", 0) > time.time():
+            have = {t: b for t, b in d["bars"].items() if start <= t < end}
+            last_closed = now - now % step - step
+            if have and max(have) >= min(end, last_closed) - 2 * step:
+                todo = []
         if todo:
             stable = now - now % step - 2 * step
-            got_any, new_cov = False, []
-            for s, e in todo:
-                got = FETCHERS[source](symbol, interval, s, e)
-                d["bars"].update(got)
-                if got:  # an empty answer may be a hiccup (seen on Yahoo): don't remember it, ask again next run
-                    got_any = True
+            got = _fetch_todos(source, symbol, interval, todo)
+            d["bars"].update(got)
+            if got:  # an empty answer may be a hiccup (seen on Yahoo): don't remember it, ask again next run
+                new_cov = []
+                for s, e in todo:
                     if min(e, stable) > s:
                         new_cov.append([s, min(e, stable)])
-            if got_any:
                 d["covered"] = _merge_ranges(d["covered"] + new_cov)
+                d["fresh_until"] = time.time() + RECENT_TTL_S
                 _write_cache(path, d)
-        return {t: b for t, b in d["bars"].items() if start <= t < end}
+        result = {t: b for t, b in d["bars"].items() if start <= t < end}
+        if result or not todo:
+            _mem_put(key, result)
+        return result
 
 
 # ---------------------------------------------------------------- mapping
@@ -525,8 +705,14 @@ def load(m, interval, start, end, refresh=False, kind=None, use_backups=True, lo
     kind = kind or asset_kind(m)
     thr = THRESHOLD.get(kind, 0.0015)
     mfp_sym = f"{m['provider']}|{m['coin']}"
-    errors = []
-    primary = cached_fetch("mfp", mfp_sym, interval, start, end, refresh)
+    errors, mfp_failed = [], None
+    try:
+        primary = cached_fetch("mfp", mfp_sym, interval, start, end, refresh)
+    except Exception as ex:
+        # After retries, fall back to backups for the whole window. Never invent bars.
+        mfp_failed = ex
+        errors.append(f"mfp: {friendly_source_error(ex) or str(ex)[:160]}")
+        primary = {}
     blist, mult = [], {}
     session_mkt = m["provider"] in ("veranta", "ostium")
 
@@ -558,7 +744,10 @@ def load(m, interval, start, end, refresh=False, kind=None, use_backups=True, lo
                 first_bar_ms=bars[0][0] if bars else None, last_bar_ms=bars[-1][0] + step if bars else None,
                 days_covered=round(((bars[-1][0] + step) - bars[0][0]) / DAY, 1) if bars else 0.0,
                 bars=len(bars), segments=segments, overlap_checks=checks, threshold_pct=thr * 100,
-                backfill_needed=need, gaps=gaps, errors=errors)
+                backfill_needed=need, gaps=gaps, errors=errors,
+                mfp_unavailable=mfp_failed is not None)
+    if not bars and mfp_failed is not None:
+        raise SourceBusy(BUSY_MSG) from mfp_failed
     return bars, prov
 
 
@@ -578,10 +767,15 @@ def provenance_text(prov, days_tested=None):
             part += " (unverified)"
         chk.append(part)
     g = prov["gaps"]
+    overlap = ("; ".join(chk) if chk else
+               ("MFP feed was unavailable; backup used for the whole window" if prov.get("mfp_unavailable")
+                else ("n/a, MFP covered the whole window" if not prov["backfill_needed"] else "no backup used")))
     s = (f"Data: {segs}. " + (f"Tested {days_tested:g} days; " if days_tested is not None else "")
          + f"{prov['days_covered']:g} days of {prov['interval']} bars loaded incl. warm-up. "
          + f"Gaps: {g['gaps']} ({g['missing_bars']} missing bars)" + (f", plus {g['weekend_closures']} weekend closures" if g['weekend_closures'] else "")
-         + ". Overlap: " + ("; ".join(chk) if chk else ("n/a, MFP covered the whole window" if not prov["backfill_needed"] else "no backup used")) + ".")
+         + ". Overlap: " + overlap + ".")
+    if prov.get("mfp_unavailable"):
+        s = "MFP feed was unavailable; used backup sources for the requested window. " + s
     if prov.get("errors"):
         s += " Source errors: " + "; ".join(prov["errors"]) + "."
     return s

@@ -71,37 +71,9 @@ def asset_class(m):
 
 
 async def _fetch_chunks(provider, coin, interval, windows):
-    import websockets
-    out, sem = {}, asyncio.Semaphore(4)  # MFP: max 4 concurrent history requests
-    async with websockets.connect(WS_URL, compression="deflate", open_timeout=15, max_size=2**25) as ws:
-        pending = {}
-
-        async def reader():
-            while True:
-                f = json.loads(await asyncio.wait_for(ws.recv(), 30))
-                fut = pending.pop(f.get("id"), None)
-                if fut and not fut.done():
-                    fut.set_result(f)
-
-        async def one(i, s, e):
-            async with sem:
-                fut = asyncio.get_event_loop().create_future()
-                pending[i] = fut
-                await ws.send(json.dumps({"op": "req", "id": i, "method": "candles.history",
-                                          "payload": {"provider": provider, "symbol": coin, "interval": interval,
-                                                      "limit": 1000, "startTime": s, "endTime": e}}))
-                f = await asyncio.wait_for(fut, 40)
-                if f.get("op") == "err":
-                    raise RuntimeError(f"MFP error: {f}")
-                for x in f.get("result") or []:
-                    if x.get("isFinal", True):
-                        out[int(x["openTime"])] = (int(x["openTime"]), float(x["open"]), float(x["high"]),
-                                                   float(x["low"]), float(x["close"]))
-
-        rd = asyncio.create_task(reader())
-        await asyncio.gather(*(one(i, s, e) for i, (s, e) in enumerate(windows, 1)))
-        rd.cancel()
-    return out
+    """MFP history on one socket, with 429/connect retries. Delegates to sources.py so both paths behave the same."""
+    import sources
+    return await sources._mfp_chunks(provider, coin, interval, windows)
 
 
 LAST_PROVENANCE = {}  # (market_id, interval) -> provenance dict of the last load (sources, ranges, gaps, overlap)
@@ -111,7 +83,15 @@ USE_BACKUPS = True
 def fetch_candles(m, interval, start_ms, end_ms, refresh=False):
     """Final candles [start_ms, end_ms): MFP feed first, older bars backfilled from backup sources (see sources.py)."""
     import sources
-    bars, prov = sources.load(m, interval, start_ms, end_ms, refresh=refresh, kind=asset_class(m), use_backups=USE_BACKUPS)
+    try:
+        bars, prov = sources.load(m, interval, start_ms, end_ms, refresh=refresh, kind=asset_class(m), use_backups=USE_BACKUPS)
+    except sources.SourceBusy:
+        raise SystemExit(sources.BUSY_MSG) from None
+    except Exception as e:
+        msg = sources.friendly_source_error(e)
+        if msg:
+            raise SystemExit(msg) from None
+        raise
     LAST_PROVENANCE[(m["market_id"], interval)] = prov
     return bars
 

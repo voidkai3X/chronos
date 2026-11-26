@@ -32,6 +32,19 @@ def err(msg, code=400):
     return jsonify(error=msg), code
 
 
+def public_engine_error(last):
+    """Map engine stderr to a public JSON error. Never return a raw Python traceback or WebSocket 429."""
+    import sources
+    text = str(last or "").strip()
+    busy = sources.friendly_source_error(text)
+    if busy:
+        return err(busy, 503)
+    low = text.lower()
+    if "traceback" in low or "exceptions." in low or text.startswith("  File ") or "websocket" in low:
+        return err(sources.BUSY_MSG, 503)
+    return err(text or "engine failed", 422)
+
+
 def reset_rate_limits():
     """Test helper: clear per-IP counters."""
     with _rate_guard:
@@ -234,7 +247,8 @@ def run_engine(p, compare=False, timeout=None):
                            "the candle cache makes repeat runs fast", 504)
             if proc.returncode != 0 or not os.path.exists(jp):
                 msg = (proc.stderr or proc.stdout or "engine failed").strip().splitlines()
-                return err(msg[-1] if msg else "engine failed", 422)
+                last = msg[-1] if msg else "engine failed"
+                return public_engine_error(last)
             out = json.load(open(jp))
             out["elapsed_s"] = round(time.time() - t0, 1)
             return jsonify(out)
@@ -291,7 +305,8 @@ def price():
     try:
         bars = asyncio.run(tester._fetch_chunks(m["provider"], m["coin"], "15m", [(end - 12 * step, end)]))
     except Exception as e:
-        return err(f"MFP price fetch failed: {e}", 502)
+        import sources
+        return err(sources.friendly_source_error(e) or "Price data source is busy, try again in a minute", 503)
     if not bars:
         return err("no recent candles from MFP for this market", 502)
     t = max(bars)
@@ -429,7 +444,14 @@ def _run_scan():
         start = end_ms - hist - warm
         try:
             base = tester.fetch_candles(m, "15m", start, end_ms, refresh=False)
+        except SystemExit as e:
+            import sources
+            return err(sources.friendly_source_error(e) or str(e), 503 if sources.friendly_source_error(e) else 422)
         except Exception as e:
+            import sources
+            msg = sources.friendly_source_error(e)
+            if msg:
+                return err(msg, 503)
             return err(f"could not load candles for {m['market_id']}: {e}", 502)
         if len(base) < 200:
             return err(f"not enough history for {m['market_id']}", 422)
