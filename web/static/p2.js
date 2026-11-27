@@ -63,8 +63,9 @@ const TYPE_ORDER = [["Your levels", ["similar", "every_close"]], ["Rule-based", 
   ["Zone rules (approximations)", ["zone_retest", "zone_sweep", "zone_bos"]]];
 const PARAM_LBL = { fast: "Fast EMA", slow: "Slow EMA", stop_atr: "Stop (ATR)", lookback: "Lookback candles", min_gap_atr: "Min gap (ATR)", valid_bars: "Order valid (candles)" };
 function setView(v) {
-  const cmp = v === "cmp";
+  const cmp = v === "cmp", lib = v === "lib";
   document.body.classList.toggle("view-cmp", cmp);
+  document.body.classList.toggle("view-lib", lib);
   [...$("view-seg").children].forEach(b => b.classList.toggle("on", b.dataset.view === v));
   $("view-help").hidden = !cmp;
   $("strat-block").hidden = !cmp;
@@ -76,9 +77,11 @@ function setView(v) {
   if (!$("skel").hidden) return;
   const hasTest = !!C.getResult();
   $("strat-res").hidden = !(cmp && scResult);
-  $("res").hidden = !( !cmp && hasTest);
-  $("empty").hidden = cmp ? !!scResult : hasTest;
+  $("res").hidden = !(!cmp && !lib && hasTest);
+  $("empty").hidden = lib || (cmp ? !!scResult : hasTest);
+  if ($("lib-res")) $("lib-res").hidden = !lib;
   showingStrat = cmp && !!scResult;
+  document.dispatchEvent(new CustomEvent("chronos:view", { detail: v }));
 }
 $("view-seg").addEventListener("click", e => { const b = e.target.closest("button"); if (b) setView(b.dataset.view); });
 
@@ -172,6 +175,7 @@ const SC_DASH = [[], [6, 4], [], [2, 3], [8, 3, 2, 3], [4, 4]];
 let scSort = { key: null, dir: -1 };
 const SC_COLS = [
   { k: "name", t: "Strategy", v: r => r.name, f: (r, i) => `<span class="sw" style="background:${SC_COLORS[i % 6]}"></span><b>${esc(r.name)}</b><div class="muted small">${esc(r.label)}${r.kind === "approx" ? " · approximation" : r.kind === "rule" ? " · rule" : " · your levels"}</div>` },
+  { k: "edge_score", t: "Edge Score", v: r => r.edge_score ?? -1, f: r => r.edge_score == null ? "-" : `<b>${r.edge_score}</b><div class="muted small">${esc(r.edge_label || "")}</div>`, r: 1 },
   { k: "closed", t: "Trades", v: r => r.closed ?? -1, f: r => `${r.closed}<div class="muted small">${r.setups} setups</div>`, r: 1 },
   { k: "win_rate", t: "Win rate", v: r => r.win_rate ?? -1, f: r => pct(r.win_rate), r: 1 },
   { k: "expectancy_r", t: "Expectancy", v: r => r.expectancy_r ?? -99, f: r => `<b class="${cls(r.expectancy_r)}">${sgnR(r.expectancy_r)}</b><div class="muted small">theor. ${sgnR(r.expectancy_r_gross)}</div>`, r: 1 },
@@ -379,6 +383,10 @@ document.addEventListener("keydown", e => {
 let rzT = null;
 window.addEventListener("resize", () => { clearTimeout(rzT); rzT = setTimeout(() => { if (!$("rp").hidden) drawReplay(); if (scResult && !$("strat-res").hidden) drawScChart(); }, 120); });
 
-window.P2 = { runStrategies, openReplay, showingStrategies: () => showingStrat && document.body.classList.contains("view-cmp") };
-if (new URLSearchParams(location.search).get("view") === "compare") setView("cmp");
+window.P2 = { runStrategies, openReplay, setView, showingStrategies: () => showingStrat && document.body.classList.contains("view-cmp"),
+  // strategy library (p3.js): read the device-saved rows, or load saved strategies into the comparison
+  deviceRows: () => { try { const v = JSON.parse(localStorage.getItem(LS_KEY) || "null"); return Array.isArray(v) ? v : []; } catch (e) { return []; } },
+  setRows: async rows => { await loadTypes(); stratRows = rows.filter(r => types[r.type]).slice(0, limits.max); save(); drawStratRows(); } };
+{ const qv = new URLSearchParams(location.search).get("view");
+  if (qv === "compare") setView("cmp"); else if (qv === "library") setView("lib"); }
 })();

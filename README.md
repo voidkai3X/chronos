@@ -305,6 +305,15 @@ Output includes orders, fills, unfilled orders, TP, SL and time exits; win rate 
 - **Market conditions.** Each trade is tagged at its signal from closed 4h candles: trending or ranging (efficiency ratio over 20 candles, 0.30 or more = trending), high or low volatility (ATR14 percentile against the previous 90 candles), bullish, bearish or mixed (close vs EMA50 and its 5-candle slope). Groups under 15 trades are flagged as small, under 5 are not judged.
 - **Strategy comparison.** `POST /api/strategies` runs 2 to 6 strategies on the same market, window, fees, slippage, timeframe and filters (`python strategy_compare.py spec.json` from the CLI). `GET /api/strategy-types` lists what can be tested and which named patterns are approximations.
 
+### Phase 3 tools (web)
+
+- **My strategies (signed-in users).** Save a setup with its name, description, setup type and rule settings, side, markets, timeframe, HTF filter, entry offset, stop, R:R, order expiry, time stop, window, slippage and free-text entry/exit notes (notes are kept but not tested). Edit, duplicate, delete (with confirm), run, and compare 2 to 6 saved strategies under identical conditions. Signed-out users can still test and compare; only saving needs an account. Device-saved Phase 2 comparisons can be imported. Limits: 50 strategies per user, 200 runs per strategy (oldest removed first).
+- **Run history.** Each run of a saved strategy stores a snapshot on the server: key metrics, Edge Score, settings, data sources and time. Candles and trades are not stored. The history table and trend chart show how results moved as the window rolled forward.
+- **Endpoints.** All need a sign-in and the `X-CSRF-Token` header, GETs included; another user's ids return 404. `GET/POST /api/library/strategies`, `GET/PUT/DELETE /api/library/strategies/<id>`, `POST /api/library/strategies/<id>/duplicate`, `GET /api/library/strategies/<id>/runs`, `DELETE /api/library/runs/<id>`, `POST /api/library/import`. `POST /api/test` accepts `strategy_id` (checked for ownership before the engine runs), `max_hold` and `mode: "rule"`.
+- **Edge Score (0-100).** Shown with every result, in the comparison table and in run history, with a "How this is calculated" panel. It is built from expectancy in R after costs, statistical confidence, sample size, profit factor, drawdown, consistency over time and across market conditions, and survival at double costs, with caps for small or uncertain samples. Win rate alone earns nothing. The engine verdict follows the score. Method: [docs/EDGE_SCORE.md](docs/EDGE_SCORE.md).
+- **Advanced analytics.** Earlier vs later trades (2/3 vs 1/3, out-of-sample check), 90% bootstrap ranges for expectancy and win rate (2,000 resamples), and the Monte Carlo drawdown range (1,000 random orders). All are computed from the test's real trades only.
+- **Database.** Two new tables, `strategies` and `strategy_runs`, are added on startup by `create_all`, which only creates missing tables and does not touch `users`. This works on SQLite and Postgres. Deleting an account deletes its strategies and runs.
+
 ## Checks
 
 `python tests/test_pattern.py` runs offline pattern-mode checks on synthetic candles:
@@ -315,6 +324,10 @@ Output includes orders, fills, unfilled orders, TP, SL and time exits; win rate 
 - **Hand-built retest.** A base, then a drop, then a rally back to the zone low. The order fills at the zone low with the stop above the zone, and it hits TP for exactly +2R. With the data cut before the drop candle closes, there is no zone and no order.
 
 `python tests/test_similar.py` runs offline checks for similar mode: the path is scale-free (a 2x-scaled copy stays close); fingerprints are causal (later bars cannot change an earlier window); overlapping matches are dropped; the query window itself is not traded; results sort by distance; live levels keep the same ATR shape and R:R; and the live-scan gate only opens for a possible or proven edge.
+
+`python tests/test_edge_score.py` runs offline Edge Score checks: the worked example (a 90% win rate with negative expectancy scores 0; a 40% win rate at +0.2R scores 60 Promising at 150 trades and Strong at 400); win rate alone is not rewarded; every cap; each component; bootstrap, Monte Carlo and walk-forward on known trade lists; and the engine output and verdict.
+
+`python tests/test_library.py` runs offline library checks: signed-out and missing-CSRF requests are refused; another user's strategies and runs return 404, including through `/api/test` with `strategy_id`; create, read, update, duplicate and delete; spec validation; the 50 and 200 limits; import; snapshots without candles or trades; account deletion removes the user's strategies; and the additive migration on an existing SQLite database (and on Postgres when `CHRONOS_PG_TEST_URL` is set). `node tests/p3_shots.cjs <base_url> web/screenshots` drives the Phase 3 UI against the mock server and saves `web/screenshots/p3-*.png`.
 
 `python tests/test_rate_limit.py` runs offline checks for the web rate limiter: 6 heavy requests per IP per minute then 429; compare/scan share that budget; a second concurrent heavy run from the same IP is rejected; the slot is released afterwards; `CF-Connecting-IP` is trusted only from localhost; and `/` and `/api/health` are not limited.
 
@@ -357,6 +370,8 @@ Output includes orders, fills, unfilled orders, TP, SL and time exits; win rate 
 - One trade at a time gives about 15–45 trades in 90 days. Most single setups will read "too few samples". Treat any result under about 50 trades as a rough check, not proof.
 - 15m candles cannot show the order of moves inside a bar. The tie rules always assume the worse case.
 - Slippage is a fixed assumption (default 1 bps), not measured from order books. Funding is not modelled yet.
+- The Edge Score summarises one past window. It is a statistical assessment, not a forecast, and it moves as the window rolls forward. Bootstrap and Monte Carlo ranges assume trades are independent.
+- A saved strategy with several markets runs on its first market; comparing saved strategies uses the first picked strategy's market, levels, timeframe and costs. Fees are always MFP's real fees for the market.
 - Results describe the past only. They are not a forecast and not advice.
 
 ## Disclaimer
@@ -381,8 +396,8 @@ The full plan is in `docs/ROADMAP.md`, and the Phase 1 audit is in `docs/AUDIT.m
 
 **Later**
 - Funding costs.
-- Walk-forward train/test split.
-- Confidence ranges around reported metrics.
+- ~~Walk-forward train/test split.~~ Done in Phase 3 (earlier vs later trades).
+- ~~Confidence ranges around reported metrics.~~ Done in Phase 3 (bootstrap and Monte Carlo).
 - Pattern mode v2: equal-high/low and session-high liquidity, efficiency-based stop choice, higher-timeframe context.
 - Insights: optional AI rewording, limited to numbers the engine already produced. The rule-based layer is done.
 

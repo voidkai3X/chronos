@@ -26,6 +26,7 @@ function renderAcct() {
   $("acct-signout").hidden = !u;
   $("acct-email").textContent = u ? u.email : "";
   $("acct-email").title = u ? u.email : "";
+  document.dispatchEvent(new CustomEvent("chronos:auth", { detail: { user: u } }));
 }
 
 async function loadMe() {

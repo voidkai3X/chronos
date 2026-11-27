@@ -35,7 +35,7 @@ function pick(id) {
   $("market").value = chosen.symbol;
   $("mkt-id").textContent = chosen.market_id;
   $("ac-list").hidden = true; $("market").setAttribute("aria-expanded", "false"); acIdx = -1;
-  loadPrice();
+  return loadPrice();
 }
 $("market").addEventListener("input", () => { chosen = null; $("mkt-id").textContent = ""; setPrice("", ""); acIdx = -1; renderAc(); });
 $("market").addEventListener("focus", renderAc);
@@ -52,16 +52,17 @@ document.addEventListener("click", e => { if (!e.target.closest(".ac")) $("ac-li
 let refPrice = null;
 function setPrice(txt, cls) { const el = $("price"); el.textContent = txt; el.className = "price" + (cls ? " " + cls : ""); }
 function loadPrice() {
-  if (!chosen) return;
+  if (!chosen) return Promise.resolve(null);
   const id = chosen.market_id;
   setPrice("loading price...", "loading");
-  fetch("/api/price?market=" + encodeURIComponent(id)).then(r => r.json()).then(j => {
-    if (!chosen || chosen.market_id !== id) return;
-    if (j.error) { setPrice("price unavailable", "bad"); refPrice = null; return; }
+  return fetch("/api/price?market=" + encodeURIComponent(id)).then(r => r.json()).then(j => {
+    if (!chosen || chosen.market_id !== id) return null;
+    if (j.error) { setPrice("price unavailable", "bad"); refPrice = null; return null; }
     refPrice = j.price;
     setPrice(fmt(j.price) + " · last 15m close", "");
     updateRR();
-  }).catch(() => { setPrice("price unavailable", "bad"); });
+    return j.price;
+  }).catch(() => { setPrice("price unavailable", "bad"); return null; });
 }
 
 // ---------- side + live R:R
@@ -357,7 +358,7 @@ function setBusy(b) {
   if (b && window.matchMedia("(max-width: 980px)").matches) $("results").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 function toast(msg, title) {
-  const t = document.createElement("div"); t.className = "toast"; t.setAttribute("role", "alert");
+  const t = document.createElement("div"); t.className = title === "" ? "toast info" : "toast"; t.setAttribute("role", title === "" ? "status" : "alert");
   const head = title === "" ? "" : `<b>${esc(title == null ? "Test failed." : title)}</b> `;
   t.innerHTML = `<span>${head}${esc(msg)}</span><button type="button" aria-label="Dismiss">×</button>`;
   t.querySelector("button").onclick = () => t.remove();
@@ -393,7 +394,8 @@ async function run() {
   const body = { market: mk, side, entry: +$("entry").value, tp: +$("tp").value, sl: +$("sl").value,
     days: +$("days").value, expiry: $("expiry").value, trend_filter: $("trend").checked, mode,
     insights: mode === "similar" ? false : $("insights").checked,
-    slippage: slip, slippage_unit: $("slip-unit").value, allow_overlap: mode !== "pattern" && $("overlap").checked };
+    slippage: slip, slippage_unit: $("slip-unit").value, allow_overlap: mode !== "pattern" && $("overlap").checked,
+    max_hold: $("max-hold") ? $("max-hold").value : "7d" };
   const pat = (($("shot-pattern") && $("shot-pattern").value) || setupPattern || "").trim();
   if (pat) body.pattern = pat;
   body.tf = $("similar-tf").value;
@@ -403,6 +405,15 @@ async function run() {
   if (mode === "similar") {
     body.similar_tf = $("similar-tf").value;
     body.similar_bars = +$("similar-bars").value || 24;
+  }
+  const lib = window.P3 && window.P3.takeRunOverrides ? window.P3.takeRunOverrides() : null;
+  if (lib) {  // running a saved strategy: its own setup type, and the result snapshot is saved to the library
+    body.strategy_id = lib.strategy_id;
+    if (lib.mode === "rule") {
+      Object.assign(body, { mode: "rule", rule: lib.rule, rule_params: lib.rule_params || {}, insights: false });
+      delete body.similar_tf; delete body.similar_bars; delete body.zone_tf; delete body.entry_style;
+    }
+    if (lib.pattern_label) body.pattern = lib.pattern_label;
   }
   lastRequest = body;
   setBusy(true);
@@ -423,6 +434,7 @@ function badgeFor(v) {
   v = (v || "").toLowerCase();
   if (v.startsWith("too few")) return ["few", "Too few samples"];
   if (v.startsWith("no edge")) return ["noedge", "No edge"];
+  if (v.startsWith("no reliable edge")) return ["few", "No reliable edge"];
   if (v.startsWith("possible edge")) return ["maybe", "Possible edge, not proven"];
   if (v.startsWith("edge")) return ["edge", "Edge on this sample"];
   return ["few", v];
@@ -447,6 +459,8 @@ function render(o) {
       ? `Entry style ${p.entry_style}: ${p.placement}. Stop ${p.sl_buffer_atr.toFixed(2)} ATR beyond the move's extreme, target ${g.rr.toFixed(2)}R. Time stop ${p.max_hold}`
       : `Replayed as a limit at the near edge of each fresh ${g.side === "short" ? "supply" : "demand"} area on ${p.zone_tf} candles, ` +
       `stop ${p.sl_buffer_atr.toFixed(2)} ATR beyond the far edge (${p.sl_buffer_source.how}), target ${g.rr.toFixed(2)}R. Time stop ${p.max_hold}`);
+  } else if (p.mode === "rule") {
+    how = `RULE: ${p.rule_label || p.rule}. ${windowTxt}${p.placement}. Expiry ${p.expiry}, time stop ${p.max_hold}`;
   } else {
     const atf = p.setup_tf || "4h";
     how = `EVERY ${atf.toUpperCase()} CLOSE. ${windowTxt}Price at test ${fmt(g.ref)}, ${atf} ATR ${fmt(g.atr, 4)}. Replayed as entry ${g.entry_atr >= 0 ? "+" : ""}${g.entry_atr.toFixed(2)} ATR (${g.entry_type}), ` +
@@ -1096,7 +1110,16 @@ function applyQuery() {
 window.CHRONOS = { $, fmt, px, pct, sgnR, sgnPct, wat, esc, durTxt, srcLabel, sizeCanvas, niceStep, toast, setBusy,
   showErr, showResErr, levelError, card, EXIT_LBL, STATUS_LBL,
   getMarket: () => (chosen ? chosen.market_id : $("market").value.trim()),
-  getSide: () => side, getResult: () => lastResult };
+  getSide: () => side, getResult: () => lastResult,
+  // used by the strategy library (p3.js) to load a saved strategy into the form
+  pickMarket: id => { const m = markets.find(x => x.market_id === id || x.symbol.toUpperCase() === String(id).toUpperCase());
+    return m ? pick(m.market_id) : Promise.resolve(null); },
+  findMarket: id => markets.find(x => x.market_id === id || x.symbol.toUpperCase() === String(id).toUpperCase()) || null,
+  getRefPrice: () => refPrice, getMode: () => mode, getTf: () => $("similar-tf").value,
+  setSide: s => $("side").querySelector(`[data-side=${s === "short" ? "short" : "long"}]`).click(),
+  setMode: m => { const b = $("mode").querySelector(`[data-mode="${m}"]`); if (b) b.click(); },
+  setTf: tf => { $("similar-tf").value = tf; tfTouched = true; },
+  updateRR, run };
 })();
 
 /* Small live UTC clock in the hero (display only). */

@@ -862,6 +862,16 @@ def summarize(trades, g, min_samples=MIN_SAMPLES):
         verdict=verdict)
 
 
+def apply_edge(s, trades):
+    """Edge Score + analytics from the trades; rewrites s['verdict'] so it agrees with the score."""
+    import edge_score as ES
+    edge, analytics = ES.analyse(trades)
+    s["verdict"] = ES.verdict(s, edge, MIN_SAMPLES)
+    s["edge_score"] = edge["score"]
+    s["edge_band"] = edge["band"]
+    return edge, analytics
+
+
 def fmt_ts(ms):
     return time.strftime("%d %b %H:%M", time.gmtime(ms / 1000 + 3600)) + " WAT"
 
@@ -963,6 +973,12 @@ def text_report(out):
         L += [""] + _sim.similar_matches_lines(out["similar_matches"])
     if out["data"].get("provenance_text"):
         L += ["", out["data"]["provenance_text"]]
+    e = out.get("edge")
+    if e:
+        L += ["", f"Edge Score: {e['score']}/100 ({e['label']})" + (
+            "; capped: " + "; ".join(c["reason"] for c in e["caps"]) if e["capped"] else "") + ".",
+              "  " + ", ".join(f"{c['name']} {c['points']:g}/{c['weight']}" for c in e["components"]) + ".",
+              "  " + e["disclaimer"]]
     L += ["", f"Verdict: {s['verdict']}.",
           f"Fees used: {out['fees']['commission_pct_per_fill']}% per fill + {out['fees']['swap_pct_per_day']}%/day swap ({out['fees']['asset_class']}, MFP standard).",
           "Backtest on past candles only. Not a prediction, not advice."]
@@ -1114,7 +1130,7 @@ def parse_compare(spec, markets, source=None):
 
 
 def pair_works(result):
-    """True when the engine called a positive edge with enough samples (not 'too few' or 'no edge')."""
+    """True when the Edge Score is Promising or Strong ('possible edge' / 'edge on this sample' verdicts)."""
     v = (result or {}).get("verdict") or ""
     return v.startswith("possible edge") or v.startswith("edge ")
 
@@ -1125,6 +1141,8 @@ def short_verdict(result):
         return "too few samples"
     if v.startswith("no edge"):
         return "no edge"
+    if v.startswith("no reliable edge"):
+        return "no reliable edge"
     if v.startswith("possible edge"):
         return "possible edge"
     if v.startswith("edge "):
@@ -1430,6 +1448,7 @@ def run_market(m, a, g_user, mode, end_ms, start_ms, warm, expiry, sl_buffer, sl
     import conditions as C
     cond = C.analyse(trades, base, end_ms=end_ms)
     s = summarize(trades, g)
+    edge, analytics = apply_edge(s, trades)
     import metrics as MX
     stats = MX.compute(trades, setups_identified=setups, setups_basis=basis)
     stats["why"] = MX.explain(stats, trades, MIN_SAMPLES)
@@ -1442,7 +1461,8 @@ def run_market(m, a, g_user, mode, end_ms, start_ms, warm, expiry, sl_buffer, sl
                fees=dict(asset_class=cls, commission_pct_per_fill=fee, swap_pct_per_day=swap),
                costs=dict(asset_class=cls, commission_pct_per_fill=fee, swap_pct_per_day=swap, slippage=slip,
                           allow_overlap=allow_overlap),
-               skipped_by_trend=skipped, trend_now=trend_now, result=s, stats=stats, conditions=cond)
+               skipped_by_trend=skipped, trend_now=trend_now, result=s, stats=stats, conditions=cond,
+               edge=edge, analytics=analytics)
     if gate is not None:
         out["htf"] = dict(gate.info(), now=gate.state(end_ms))
     out["data_quality"] = data_quality(out["data"], s, stats)
@@ -1837,13 +1857,14 @@ def run_setup(a, mode, ctx, sl_buffer, sl_src, basket):
     else:
         trades = sorted((t for _, tr in runs for t in tr), key=lambda t: t.get("exit") or t["placed"])
         pooled = summarize(trades, g)
+        pedge, panalytics = apply_edge(pooled, trades)
         import metrics as MX
         pstats = MX.compute(trades, setups_identified=sum(r[0]["stats"]["setups_identified"] for r in runs),
                             setups_basis=runs[0][0]["stats"]["setups_basis"] + ", all markets")
         pstats["why"] = MX.explain(pstats, trades, MIN_SAMPLES)
         out = dict(head, market=runs[0][0]["market"], setup=runs[0][0]["setup"], data=runs[0][0]["data"],
                    basket=[r[0]["market"]["market_id"] for r in runs], per_market=[r[0] for r in runs], result=pooled,
-                   stats=pstats, costs=runs[0][0].get("costs"))
+                   stats=pstats, costs=runs[0][0].get("costs"), edge=pedge, analytics=panalytics)
         if mode == "pattern":
             out["zones"] = {k: sum(r[0]["zones"][k] for r in runs) for k in ("zones_found", "zones_traded", "zones_touched", "zones_invalidated")}
         if mode == "similar":

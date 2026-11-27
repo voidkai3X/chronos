@@ -266,6 +266,11 @@ def create_user(email, password, is_admin=False):
 
 def delete_user(uid):
     with engine().begin() as c:
+        try:
+            import library  # strategies and run snapshots go with the account
+            library.delete_user_data(c, uid)
+        except ImportError:
+            pass
         c.execute(delete(users).where(users.c.id == uid))
 
 

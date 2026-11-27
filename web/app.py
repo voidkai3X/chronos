@@ -16,6 +16,7 @@ sys.path.insert(0, HERE)
 import tester  # noqa: E402  (engine: load_markets, resolve_market, _fetch_chunks)
 import screenshot as shot  # noqa: E402
 import auth  # noqa: E402  (accounts: sign-up, sign-in, copy trading gate)
+import library  # noqa: E402  (saved strategies + run snapshots; registers its tables before the engine starts)
 
 RUN_TIMEOUT = int(os.environ.get("TESTER_TIMEOUT", "240"))  # first run of a market may backfill from OKX/Yahoo  # seconds per backtest
 MAX_PARALLEL = int(os.environ.get("TESTER_MAX_PARALLEL", "2"))
@@ -34,6 +35,7 @@ app.config["DEBUG"] = False
 app.config["ENV"] = "production"
 app.config["MAX_CONTENT_LENGTH"] = shot.MAX_BYTES + 256 * 1024  # 5 MB image plus form overhead
 auth.init_app(app)
+app.register_blueprint(library.bp)
 
 
 def err(msg, code=400):
@@ -174,6 +176,25 @@ def attach_pattern(resp, pattern):
     return jsonify(data)
 
 
+def attach_library_run(resp, uid, p, d):
+    """Save a result snapshot (metrics, params, provenance; no candles) for a saved strategy's run."""
+    body, code = resp if isinstance(resp, tuple) else (resp, 200)
+    if code != 200:
+        return resp
+    try:
+        data = body.get_json()
+    except Exception:
+        return resp
+    if not isinstance(data, dict) or data.get("error"):
+        return resp
+    try:
+        rid = library.save_run(uid, p["strategy_id"], data, dict(entry=p["entry"], tp=p["tp"], sl=p["sl"]))
+        data["library_run"] = dict(saved=bool(rid), id=rid, strategy_id=p["strategy_id"])
+    except Exception:
+        data["library_run"] = dict(saved=False, error="The result could not be saved to your library.")
+    return jsonify(data)
+
+
 @app.errorhandler(413)
 @app.errorhandler(RequestEntityTooLarge)
 def too_large(_e):
@@ -190,6 +211,19 @@ def resolve(name):
         return tester.resolve_market(name, tester.load_markets())
     except SystemExit as e:
         raise ValueError(str(e))
+
+
+def _strategy_id(d):
+    v = d.get("strategy_id")
+    if v in (None, ""):
+        return None
+    try:
+        v = int(v)
+    except (TypeError, ValueError):
+        raise ValueError("strategy_id must be a number")
+    if v <= 0:
+        raise ValueError("strategy_id must be a number")
+    return v
 
 
 def parse_test_body(d, require_compare=False):
@@ -219,8 +253,23 @@ def parse_test_body(d, require_compare=False):
         raise ValueError("expiry must be between 1h and 14d")
     trend = bool(d.get("trend_filter"))
     mode = str(d.get("mode") or "similar").lower()
-    if mode not in ("every-close", "pattern", "similar"):
-        raise ValueError("mode must be 'similar', 'every-close' or 'pattern'")
+    if mode not in ("every-close", "pattern", "similar", "rule"):
+        raise ValueError("mode must be 'similar', 'every-close', 'pattern' or 'rule'")
+    rule, rule_params = None, None
+    if mode == "rule":
+        import strategies as R
+        rule = str(d.get("rule") or "")
+        if rule not in R.RULES:
+            raise ValueError("rule must be one of " + ", ".join(R.RULES))
+        rule_params = R.clean_params(rule, d.get("rule_params") or {})
+    max_hold = str(d.get("max_hold") or "7d").strip().lower()
+    if max_hold != "none":
+        try:
+            mh_ms = tester.parse_dur(max_hold)
+        except Exception:
+            raise ValueError("max_hold (time stop) must look like 24h, 3d or none")
+        if not 3600_000 <= mh_ms <= 30 * 86400_000:
+            raise ValueError("max_hold (time stop) must be between 1h and 30d, or none")
     TFS = tester.SETUP_TFS
     setup_tf = str(d.get("tf") or "").lower() or None  # one setup timeframe for any mode (Phase 2)
     if setup_tf is not None and setup_tf not in TFS:
@@ -243,7 +292,7 @@ def parse_test_body(d, require_compare=False):
     zone_tf = str((setup_tf if mode == "pattern" else None) or d.get("zone_tf") or "4h").lower()
     if zone_tf not in TFS:
         raise ValueError("zone_tf must be 5m, 15m, 30m, 1h, 4h or 1d")
-    close_tf = str((setup_tf if mode == "every-close" else None) or "4h")
+    close_tf = str((setup_tf if mode in ("every-close", "rule") else None) or ("1h" if mode == "rule" else "4h"))
     eff_tf = {"similar": similar_tf, "pattern": zone_tf}.get(mode, close_tf)
     interval = tester.exec_interval_for(eff_tf)
     htf = str(d.get("htf_confirm") or "off").lower()
@@ -317,7 +366,8 @@ def parse_test_body(d, require_compare=False):
                 similar_tf=similar_tf, similar_bars=similar_bars, similar_k=similar_k,
                 want_insights=want_insights, slb=slb, extras=extras,
                 slip_unit=slip_unit, slip=slip, allow_overlap=allow_overlap,
-                setup_tf=eff_tf, close_tf=close_tf, interval=interval, htf=htf, tf_sweep=sweep)
+                setup_tf=eff_tf, close_tf=close_tf, interval=interval, htf=htf, tf_sweep=sweep,
+                rule=rule, rule_params=rule_params, max_hold=max_hold, strategy_id=_strategy_id(d))
 
 
 def engine_cmd(p, json_path, compare=False):
@@ -339,6 +389,9 @@ def engine_cmd(p, json_path, compare=False):
                 "--similar-bars", str(p["similar_bars"]), "--similar-k", str(p["similar_k"])]
     else:
         cmd += ["--expiry", p["expiry"], "--setup-tf", p.get("close_tf") or "4h"]
+    if p["mode"] == "rule":
+        cmd += ["--rule", p["rule"], "--rule-params", json.dumps(p["rule_params"] or {})]
+    cmd += ["--max-hold", p.get("max_hold") or "7d"]
     if p.get("slip_unit") == "ticks" and p.get("slip"):
         cmd += [f"--slippage-ticks={p['slip']!r}"]
     else:
@@ -416,7 +469,7 @@ def _html_page(name):
     with open(path, encoding="utf-8") as f:
         html = f.read()
     ver = _ASSET_V
-    for asset in ("style.css", "app.js", "p2.js", "account.js", "auth.js"):
+    for asset in ("style.css", "app.js", "p2.js", "p3.js", "account.js", "auth.js"):
         attr = "href" if asset.endswith(".css") else "src"
         html = html.replace(f'{attr}="/static/{asset}"', f'{attr}="/static/{asset}?v={ver}"', 1)
     resp = app.response_class(html, mimetype="text/html; charset=utf-8")
@@ -605,7 +658,16 @@ def run_test():
         timeout = RUN_TIMEOUT + (len(p["tf_sweep"]) * SWEEP_PER_TF if p.get("tf_sweep") else 0)
         if p.get("tf_sweep"):
             p["want_insights"] = False  # a sweep already reruns the test up to 6 times
-        return attach_pattern(run_engine(p, compare=False, timeout=timeout), pattern_from_body(d))
+        uid = None
+        if p.get("strategy_id"):  # running a saved strategy: the result snapshot goes into the owner's library
+            u, bad = library._guard()
+            if bad:
+                return bad
+            if not library.owned_strategy(u["id"], p["strategy_id"]):
+                return err("Strategy not found.", 404)
+            uid = u["id"]
+        resp = attach_pattern(run_engine(p, compare=False, timeout=timeout), pattern_from_body(d))
+        return attach_library_run(resp, uid, p, d) if uid else resp
     finally:
         rate_done_heavy()
 
@@ -624,7 +686,7 @@ def parse_strategies_body(d):
     p = parse_test_body(dict(base, tf=d.get("tf") or "1h"), require_compare=False)
     spec = dict(market=p["market"]["market_id"], side=p["side"], entry=p["entry"], tp=p["tp"], sl=p["sl"],
                 days=p["days"], tf=p["setup_tf"], slippage=p["slip"], slippage_unit=p["slip_unit"],
-                htf_confirm=p["htf"], expiry=p["expiry"], max_hold="7d", strategies=d.get("strategies"))
+                htf_confirm=p["htf"], expiry=p["expiry"], max_hold=p["max_hold"], strategies=d.get("strategies"))
     SC.validate(spec)
     return p, spec
 

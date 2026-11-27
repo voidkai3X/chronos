@@ -56,8 +56,22 @@
     <div class="toggle seg view-seg" id="view-seg" role="group" aria-label="What to do">
       <button type="button" data-view="test" class="on">Test a setup</button>
       <button type="button" data-view="cmp">Compare strategies</button>
+      <button type="button" data-view="lib">My strategies</button>
     </div>
     <p class="help view-help" id="view-help" hidden>Run 2 to 6 strategies on the same market, window, timeframe, fees and slippage, then compare them side by side. Your levels set the market, side and R:R.</p>
+    <div class="lib-side" id="lib-side" hidden>
+      <p class="help">Save your setups with their rules, levels and costs, run them again any time, and see how their
+      results change from run to run. Every run keeps its key numbers, Edge Score, settings and data sources (not the candles).</p>
+      <div class="lib-signin" id="lib-signin" hidden>
+        <p><b>Sign in to save strategies.</b> The backtester, comparisons and replays still work without an account; only saving needs one.</p>
+        <div class="lib-signin-btns"><a class="btn-acc primary" href="/signup?next=%2F%3Fview%3Dlibrary">Create free account</a><a class="btn-acc" href="/signin?next=%2F%3Fview%3Dlibrary">Sign in</a></div>
+      </div>
+      <div class="lib-actions" id="lib-actions" hidden>
+        <button type="button" class="run" id="lib-new">New strategy</button>
+        <button type="button" class="btn-ghost" id="lib-import" hidden></button>
+        <p class="help" id="lib-count"></p>
+      </div>
+    </div>
     <form id="f" autocomplete="off" novalidate>
       <div id="shot-panel" class="shot-panel">
         <label class="lbl" id="shot-h">From a screenshot</label>
@@ -199,6 +213,16 @@
           <p class="help">An order that hasn't filled by then is cancelled.</p>
         </div>
       </div>
+      <div class="grid2">
+        <div>
+          <label class="lbl" for="max-hold">Time stop</label>
+          <div class="sel"><select id="max-hold">
+            <option value="24h">24h</option><option value="3d">3d</option><option value="7d" selected>7d</option>
+            <option value="14d">14d</option><option value="none">None</option>
+          </select></div>
+          <p class="help">A filled trade still open after this exits at market.</p>
+        </div>
+      </div>
       <label class="chk"><input id="trend" type="checkbox"><span class="box" aria-hidden="true"></span><span>Trend filter <span class="muted">only place when the 4h EMA50 slope agrees with the side</span></span></label>
       <label class="chk" id="insights-row"><input id="insights" type="checkbox"><span class="box" aria-hidden="true"></span><span>Insights <span class="muted">explain the result and compare limit / wider stop / sweep / confirm entries (a few seconds more; pattern-oriented)</span></span></label>
 
@@ -212,7 +236,7 @@
           <ul id="strat-named"></ul>
           <p>Any other name works as a label on one of these rules or on your own levels. CHRONOS can't test a pattern it can't define as a rule, so it won't pretend to.</p>
         </details>
-        <p class="help">Saved on this device only. Saving to your account comes with the strategy library.</p>
+        <p class="help" id="strat-store-note">Saved on this device. Signed in, you can move them into My strategies.</p>
       </div>
 
       <div class="costs-block">
@@ -235,6 +259,10 @@
       </div>
 
       <button id="run" class="run" type="submit"><span class="spin" hidden></span><span class="txt">Run test</span></button>
+      <div class="lib-save" id="lib-save-row">
+        <button type="button" class="btn-ghost" id="lib-save">Save as strategy</button>
+        <span class="help" id="lib-run-note"></span>
+      </div>
       <div id="form-err" class="err" role="alert" hidden></div>
     </form>
     <details class="note">
@@ -316,6 +344,21 @@
         <!-- slot: data provenance line (sources + days actually covered) -->
         <div class="provenance" id="provenance" hidden></div>
       </div>
+      <div class="panel edge-panel" id="edge-panel" hidden>
+        <div class="panel-h"><span>CHRONOS Edge Score</span><span class="muted small">from this test's trades, after costs</span></div>
+        <div class="edge-top">
+          <div class="edge-num"><b id="edge-score">-</b><span>/100</span></div>
+          <div class="edge-txt"><div class="edge-band" id="edge-band"></div><p id="edge-sum"></p></div>
+        </div>
+        <div class="edge-scale" aria-hidden="true"><span class="es-none"></span><span class="es-weak"></span><span class="es-promising"></span><span class="es-strong"></span><i id="edge-mark"></i></div>
+        <div class="edge-scale-lbl" aria-hidden="true"><span>No evidence</span><span>Weak</span><span>Promising</span><span>Strong</span></div>
+        <p class="edge-caps" id="edge-caps" hidden></p>
+        <details class="note edge-how" id="edge-how"><summary>How this is calculated</summary>
+          <div class="tbl-wrap"><table class="edge-tbl" id="edge-tbl"><thead><tr><th>Component</th><th>This test</th><th class="r">Weight</th><th class="r">Points</th></tr></thead><tbody></tbody><tfoot></tfoot></table></div>
+          <ul class="edge-rules" id="edge-rules"></ul>
+        </details>
+        <p class="edge-disc" id="edge-disc"></p>
+      </div>
       <div class="dq" id="dq" hidden></div>
       <div class="warn" id="warn" hidden></div>
       <div class="sec-h"><span>Key numbers</span><span class="muted small" id="cards-note">after fees and slippage · theoretical underneath</span></div>
@@ -339,6 +382,18 @@
         <div class="panel-h"><span>Across timeframes</span><span class="muted small">same setup, window, costs and filters</span></div>
         <div class="tbl-wrap"><table class="tfs" id="tfs"><thead><tr><th>Timeframe</th><th>Fills on</th><th class="r">Setups</th><th class="r">Closed</th><th class="r">Win rate</th><th class="r">Expectancy</th><th class="r">PF</th><th class="r">Net R</th><th class="r">Max DD</th><th>Note</th></tr></thead><tbody></tbody></table></div>
         <p class="muted small" id="tfs-note"></p>
+      </div>
+
+      <div class="panel adv-panel" id="adv-panel" hidden>
+        <div class="panel-h"><span>Advanced analytics</span><span class="muted small">from this test's real trades only</span></div>
+        <div class="adv-h">Earlier vs later trades (out-of-sample check)</div>
+        <div class="tbl-wrap"><table class="adv-wf" id="adv-wf"><thead></thead><tbody></tbody></table></div>
+        <p class="muted small" id="adv-wf-note"></p>
+        <div class="adv-grid">
+          <div class="adv-box"><div class="adv-h">Bootstrap ranges</div><div id="adv-boot"></div></div>
+          <div class="adv-box"><div class="adv-h">Monte Carlo drawdown</div><div id="adv-mc"></div></div>
+        </div>
+        <details class="note"><summary>What these mean</summary><ul id="adv-def"></ul></details>
       </div>
 
       <div class="panel chart-panel">
@@ -449,6 +504,25 @@
       <div class="meta" id="meta"></div>
     </div>
 
+    <div id="lib-res" class="lib-res" hidden>
+      <div class="panel lib-panel">
+        <div class="panel-h"><span>My strategies</span><span class="muted small" id="lib-sub"></span></div>
+        <p class="muted" id="lib-msg"></p>
+        <div class="lib-list" id="lib-list"></div>
+        <div class="lib-cmp" id="lib-cmp" hidden>
+          <button type="button" class="btn-ghost" id="lib-cmp-run" disabled>Compare selected</button>
+          <span class="help" id="lib-cmp-note">Pick 2 to 6 strategies. They run under identical conditions: the market, levels, timeframe and costs of the first one you picked.</span>
+        </div>
+      </div>
+      <div class="panel lib-hist" id="lib-hist" hidden>
+        <div class="panel-h"><span id="lib-hist-title">Run history</span><span class="muted small" id="lib-hist-sub"></span></div>
+        <canvas id="lib-trend" height="170"></canvas>
+        <div class="legend" id="lib-trend-lg"><span><i class="lg net"></i>Edge Score</span><span><i class="lg gross"></i>Expectancy (R per trade)</span></div>
+        <div class="tbl-wrap"><table class="lib-runs" id="lib-runs"><thead><tr><th>Run (WAT)</th><th>Market</th><th>Setup</th><th class="r">Edge Score</th><th class="r">Trades</th><th class="r">Win rate</th><th class="r">Expectancy</th><th class="r">PF</th><th class="r">Net R</th><th class="r">Max DD</th><th>Data</th><th></th></tr></thead><tbody></tbody></table></div>
+        <p class="muted small">Each row is a snapshot of one run: key numbers, Edge Score, settings and data sources. Candles and trades are not stored. Results move as the test window rolls forward. Up to 200 runs are kept per strategy; the oldest are removed first.</p>
+      </div>
+    </div>
+
     <div id="strat-res" hidden>
       <div class="verdict-card">
         <div class="res-head"><div class="res-main"><div class="eyebrow">Strategy comparison</div><div class="res-title" id="sc-title"></div></div></div>
@@ -529,6 +603,43 @@
 <div class="toasts" id="toasts" aria-live="assertive"></div>
 <script src="/static/account.js"></script>
 <script src="/static/app.js"></script>
+<div class="rp-modal le-modal" id="le" hidden role="dialog" aria-modal="true" aria-labelledby="le-title">
+  <form class="rp-box le-box" id="le-form" novalidate>
+    <div class="rp-head">
+      <div><div class="eyebrow">Strategy library</div><div class="rp-title" id="le-title">New strategy</div></div>
+      <button type="button" class="btn-ghost sm" id="le-close">Close</button>
+    </div>
+    <div class="le-grid">
+      <label class="le-wide"><span>Name</span><input id="le-name" type="text" maxlength="80" required></label>
+      <label class="le-wide"><span>Description</span><textarea id="le-desc" maxlength="1000" rows="2"></textarea></label>
+      <label><span>Setup type</span><span class="sel"><select id="le-type"></select></span></label>
+      <label><span>Your pattern name <i class="muted">(label only)</i></span><input id="le-label" type="text" maxlength="80" placeholder="e.g. London open sweep"></label>
+      <p class="help le-wide" id="le-type-note"></p>
+      <div class="le-wide st-params" id="le-params"></div>
+      <label><span>Side</span><span class="sel"><select id="le-side"><option value="long">Long</option><option value="short">Short</option></select></span></label>
+      <label><span>Markets <i class="muted">(up to 5, comma separated)</i></span><input id="le-markets" type="text" placeholder="BTC, ETH" autocomplete="off"></label>
+      <label><span>Setup timeframe</span><span class="sel"><select id="le-tf"><option value="5m">5m</option><option value="15m">15m</option><option value="30m">30m</option><option value="1h" selected>1h</option><option value="4h">4h</option><option value="1d">Daily</option></select></span></label>
+      <label><span>Higher-timeframe filter</span><span class="sel"><select id="le-htf"><option value="off">Off</option><option value="1h">1h</option><option value="4h">4h</option><option value="1d">Daily</option></select></span></label>
+      <label><span>Entry vs price at run time (%)</span><input id="le-entry" type="number" step="any" value="0" inputmode="decimal"></label>
+      <label><span>Stop distance from entry (%)</span><input id="le-stop" type="number" step="any" min="0.01" inputmode="decimal"></label>
+      <label><span>Reward to risk (R:R)</span><input id="le-rr" type="number" step="any" min="0.2" value="2" inputmode="decimal"></label>
+      <label><span>Order expiry</span><span class="sel"><select id="le-expiry"><option>24h</option><option>48h</option><option selected>72h</option><option>5d</option><option>7d</option></select></span></label>
+      <label><span>Time stop</span><span class="sel"><select id="le-maxhold"><option value="24h">24h</option><option value="3d">3d</option><option value="7d" selected>7d</option><option value="14d">14d</option><option value="none">None</option></select></span></label>
+      <label><span>Test window (days)</span><input id="le-days" type="number" min="30" max="90" step="1" value="90" inputmode="numeric"></label>
+      <label><span>Slippage per fill</span><input id="le-slip" type="number" min="0" step="0.1" value="1" inputmode="decimal"></label>
+      <label><span>Slippage unit</span><span class="sel"><select id="le-slip-unit"><option value="bps">bps (0.01%)</option><option value="ticks">ticks</option></select></span></label>
+      <label class="chk le-wide"><input id="le-trend" type="checkbox"><span class="box" aria-hidden="true"></span><span>4h trend filter</span></label>
+      <label class="chk le-wide"><input id="le-overlap" type="checkbox"><span class="box" aria-hidden="true"></span><span>Allow overlapping trades</span></label>
+      <label class="le-wide"><span>Entry conditions <i class="muted">(your notes)</i></span><textarea id="le-entry-notes" maxlength="1000" rows="2"></textarea></label>
+      <label class="le-wide"><span>Exit conditions <i class="muted">(your notes: TP/SL logic)</i></span><textarea id="le-exit-notes" maxlength="1000" rows="2"></textarea></label>
+    </div>
+    <p class="help">CHRONOS tests the setup type, levels and settings above; your notes are kept with the strategy but are not tested. Fees are always MFP's real fees and swap for each market.</p>
+    <div id="le-err" class="err" role="alert" hidden></div>
+    <div class="le-btns"><button type="submit" class="run" id="le-save">Save strategy</button><button type="button" class="btn-ghost" id="le-cancel">Cancel</button></div>
+  </form>
+</div>
+
 <script src="/static/p2.js"></script>
+<script src="/static/p3.js"></script>
 </body>
 </html>

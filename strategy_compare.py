@@ -125,7 +125,9 @@ def row_for(st, out, trades):
                 avg_rr_achieved=nt["avg_rr_achieved"], longest_loss_streak=nt["longest_loss_streak"],
                 avg_hours=s["duration_h"]["avg"], costs_r=s["costs"]["total_r"], t_stat=nt["t_stat"],
                 verdict=out["result"]["verdict"], dq=dq.get("status"), dq_messages=dq.get("messages") or [],
-                skipped_by_filters=out.get("skipped_by_trend"), conditions=cs.get("headline"), equity=eq, flags=flags)
+                skipped_by_filters=out.get("skipped_by_trend"), conditions=cs.get("headline"), equity=eq, flags=flags,
+                edge_score=(out.get("edge") or {}).get("score"), edge_label=(out.get("edge") or {}).get("label"),
+                edge_band=(out.get("edge") or {}).get("band"))
 
 
 def run(spec):
