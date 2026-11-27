@@ -194,7 +194,7 @@ Storage: set `DATABASE_URL` to a Postgres URL (`postgres://` and `postgresql://`
 | `FREE_DAYS` | Free period for new accounts, default 365. |
 | `COOKIE_INSECURE` | `1` only for local plain-http testing (drops the Secure cookie flag). |
 
-Account endpoints: `GET /api/auth/me`, `POST /api/auth/signup`, `POST /api/auth/signin`, `POST /api/auth/signout`, `POST /api/auth/forgot` (501, coming soon), `POST /api/auth/delete` (needs the password again), `GET /api/copy-trading` (members only).
+`GET /api/health` reports `db` (`postgres` or `sqlite`) and `db_ok`, never the URL. Account endpoints: `GET /api/auth/me`, `POST /api/auth/signup`, `POST /api/auth/signin`, `POST /api/auth/signout`, `POST /api/auth/forgot` (501, coming soon), `POST /api/auth/delete` (needs the password again), `GET /api/copy-trading` (members only).
 
 
 ## Methodology

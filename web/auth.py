@@ -91,6 +91,17 @@ def engine():
         return _engine
 
 
+def db_ok():
+    """True when the accounts database answers a trivial query. Never exposes the URL or the error text."""
+    try:
+        from sqlalchemy import text
+        with engine().connect() as c:
+            c.execute(text("SELECT 1"))
+        return True
+    except Exception:
+        return False
+
+
 def reset_engine():
     """Test helper: drop the cached engine so a new DATABASE_URL / SQLITE_PATH is used."""
     global _engine

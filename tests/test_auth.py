@@ -197,7 +197,11 @@ class TestAuth(unittest.TestCase):
         self.assertEqual(r.status_code, 403)  # missing CSRF
         r = self.post("/api/test", {}, ip="203.0.113.71")
         self.assertEqual(r.status_code, 400)  # signed in + CSRF: reaches validation
-        self.assertTrue(self.c.get("/api/health").get_json()["require_login"])
+        h = self.c.get("/api/health").get_json()
+        self.assertTrue(h["require_login"])
+        self.assertEqual(h["db"], "sqlite")
+        self.assertTrue(h["db_ok"])
+        self.assertNotIn("sqlite:", str(h))
 
     def test_pages_served(self):
         for path in ("/signin", "/signup", "/forgot"):

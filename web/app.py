@@ -396,7 +396,8 @@ def index():
 
 @app.get("/api/health")
 def health():
-    return jsonify(ok=True, screenshot=shot.enabled(), require_login=auth.require_login_enabled())
+    return jsonify(ok=True, screenshot=shot.enabled(), require_login=auth.require_login_enabled(),
+                   db=auth.db_kind(), db_ok=auth.db_ok())
 
 
 @app.get("/api/markets")
