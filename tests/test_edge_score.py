@@ -93,6 +93,22 @@ class Caps(unittest.TestCase):
             self.assertLessEqual(e["score"], 60)
             self.assertTrue(any("includes zero" in c["reason"] for c in e["caps"]))
 
+    def test_strong_needs_50_trades_and_t_of_2(self):
+        # 45 trades of a clear +R edge: every other test passes, but under 50 trades it stays below Strong
+        rs = [2.0 if i % 5 in (0, 2, 4) else -1.0 for i in range(45)]
+        e = ES.score(trades_from(rs, cost=0.01))
+        self.assertGreater(e["raw"], 69)
+        self.assertEqual((e["score"], e["label"]), (69, "Promising"))
+        self.assertTrue(any("50+ closed trades" in c["reason"] for c in e["caps"]))
+        # enough trades but t below 2 -> also capped at 69 (if the raw score would otherwise reach Strong)
+        rnd = random.Random(11)
+        for _ in range(200):
+            rs = [rnd.choice([2.6, -1.0, -1.0]) for _ in range(120)]
+            e = ES.score(trades_from(rs, cost=0.01))
+            if 0 < e["t_stat"] < 2:
+                self.assertLessEqual(e["score"], 69)
+                break
+
     def test_costs_double_kills_edge(self):
         rs = [2.0 if i % 5 in (0, 2) else -1.0 for i in range(150)]  # +0.2R
         e = ES.score(trades_from(rs, cost=0.3))  # doubling costs takes 0.3R more -> -0.1R

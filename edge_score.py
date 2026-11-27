@@ -19,6 +19,7 @@ Caps (the score cannot go above these):
   fewer than 30 closed trades      -> 40
   90% bootstrap range of average R includes 0 -> 60
   edge gone when costs are doubled -> 60
+  fewer than 50 closed trades, or t below 2 -> 69 (Strong needs both)
 Bands: 0-19 No evidence, 20-44 Weak, 45-69 Promising, 70-100 Strong.
 """
 import math, random, statistics
@@ -31,8 +32,8 @@ NAMES = dict(confidence="Statistical confidence", expectancy="Average R after co
              pf="Profit factor", drawdown="Drawdown vs return", time="Consistency over time",
              conditions="Consistency across market conditions", costs="Survives double costs")
 T_FULL, EXP_FULL, N_MIN, N_FULL, PF_FULL, RECOVERY_FULL = 3.0, 0.30, 15, 100, 2.0, 3.0
-CAP_TOO_FEW, CAP_NEGATIVE, CAP_SMALL, CAP_UNCERTAIN = 15, 15, 40, 60
-SMALL_N = 30
+CAP_TOO_FEW, CAP_NEGATIVE, CAP_SMALL, CAP_UNCERTAIN, CAP_NOT_STRONG = 15, 15, 40, 60, 69
+SMALL_N, STRONG_N, STRONG_T = 30, 50, 2.0
 GROUP_MIN = 5
 BANDS = [(70, "strong", "Strong"), (45, "promising", "Promising"), (20, "weak", "Weak"), (0, "none", "No evidence")]
 BOOT_N, MC_N, SEED = 2000, 1000, 20261127
@@ -237,6 +238,10 @@ def score(trades, boot=None, mc=None):
         caps.append((CAP_UNCERTAIN, "the 90% range of average R includes zero"))
     if avg > 0 and stressed <= 0:
         caps.append((CAP_UNCERTAIN, "the edge disappears when costs are doubled"))
+    if n < STRONG_N:
+        caps.append((CAP_NOT_STRONG, f"Strong needs {STRONG_N}+ closed trades"))
+    if t < STRONG_T:
+        caps.append((CAP_NOT_STRONG, f"Strong needs a t-statistic of {STRONG_T:g} or more"))
     cap = min([c[0] for c in caps], default=100)
     final = int(round(min(raw, cap)))
     band, label = _band(final)

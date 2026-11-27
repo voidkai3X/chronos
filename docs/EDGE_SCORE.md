@@ -42,8 +42,9 @@ The score cannot go above these, whatever the components add up to:
 | Fewer than 30 closed trades | 40 |
 | The 90% bootstrap range of average R includes zero | 60 |
 | The edge disappears when costs are doubled | 60 |
+| Fewer than 50 closed trades, or a t-statistic below 2 | 69 |
 
-So a test needs at least 30 trades to reach Promising, and a 90% bootstrap range of average R that is entirely above zero (plus survival at double costs) to reach Strong. The panel lists any cap that was applied.
+So a test needs at least 30 trades to reach Promising. To reach Strong it needs 50 or more trades, a t-statistic of 2 or more, a 90% bootstrap range of average R that is entirely above zero, and an edge that survives double costs. The panel lists any cap that was applied.
 
 ## Bands
 

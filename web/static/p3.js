@@ -33,7 +33,7 @@ function renderEdge(o) {
   $("edge-rules").innerHTML = [
     "Each component scores 0 to 1, multiplied by its weight; the weights add up to 100.",
     "Win rate on its own earns nothing: a high win rate with small wins and big losses has a negative average R and scores low.",
-    "Caps: under 15 closed trades or an average R of zero or less, at most 15. Under 30 trades, at most 40. If the 90% bootstrap range of average R includes zero, or the edge disappears when costs are doubled, at most 60.",
+    "Caps: under 15 closed trades or an average R of zero or less, at most 15. Under 30 trades, at most 40. If the 90% bootstrap range of average R includes zero, or the edge disappears when costs are doubled, at most 60. Strong (70+) also needs 50 or more trades and a t-statistic of 2 or more; otherwise at most 69.",
     "Bands: 0-19 No evidence, 20-44 Weak, 45-69 Promising, 70-100 Strong.",
     "The engine verdict above uses the same score: Promising reads as 'possible edge, not proven', Strong as 'edge on this sample'.",
   ].map(x => `<li>${esc(x)}</li>`).join("");
