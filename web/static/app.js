@@ -111,6 +111,127 @@ function updateRR() {
 ["entry", "tp", "sl"].forEach(id => $(id).addEventListener("input", updateRR));
 $("days").addEventListener("input", () => $("days-v").textContent = $("days").value);
 
+// ---------- screenshot
+let shotFile = null, shotUrl = null, setupPattern = "";
+function showShotErr(msg) { const el = $("shot-err"); if (!el) return; el.hidden = !msg; el.textContent = msg || ""; }
+function syncPicks() {
+  const box = $("shot-picks"); if (!box) return;
+  const v = ($("shot-pattern").value || "").trim();
+  box.querySelectorAll("button[data-pattern]").forEach(b => b.classList.toggle("on", b.dataset.pattern === v));
+}
+function markUnsure(id, on) { const el = $(id); if (el) el.classList.toggle("unsure", !!on); }
+function clearUnsure() { ["market", "entry", "tp", "sl", "similar-tf"].forEach(id => markUnsure(id, false)); }
+function setShotFile(file) {
+  if (!file) return clearShotFile();
+  if (file.size > 5 * 1024 * 1024) return showShotErr("That image is too large. Use a PNG, JPG or WebP under 5 MB.");
+  const okType = /image\/(png|jpeg|webp)/.test(file.type) || /\.(png|jpe?g|webp)$/i.test(file.name || "");
+  if (!okType) return showShotErr("Please upload a PNG, JPG or WebP chart screenshot.");
+  shotFile = file;
+  if (shotUrl) URL.revokeObjectURL(shotUrl);
+  shotUrl = URL.createObjectURL(file);
+  $("shot-thumb").src = shotUrl;
+  $("shot-name").textContent = file.name || "chart";
+  const kb = file.size / 1024;
+  $("shot-size").textContent = kb >= 1024 ? (kb / 1024).toFixed(2) + " MB" : Math.max(1, Math.round(kb)) + " KB";
+  $("shot-preview").hidden = false;
+  $("shot-drop-txt").hidden = true;
+  showShotErr("");
+}
+function clearShotFile() {
+  shotFile = null;
+  if (shotUrl) { URL.revokeObjectURL(shotUrl); shotUrl = null; }
+  if ($("shot-file")) $("shot-file").value = "";
+  if ($("shot-thumb")) $("shot-thumb").removeAttribute("src");
+  if ($("shot-preview")) $("shot-preview").hidden = true;
+  if ($("shot-drop-txt")) $("shot-drop-txt").hidden = false;
+}
+function applyShot(j) {
+  clearUnsure();
+  const low = new Set(j.low_confidence || []);
+  const missing = new Set(j.missing || []);
+  if (j.pattern) $("shot-pattern").value = j.pattern;
+  syncPicks();
+  setupPattern = ($("shot-pattern").value || "").trim();
+  if (j.market && j.market.market_id) {
+    const hit = markets.find(m => m.market_id === j.market.market_id);
+    if (hit) pick(j.market.market_id);
+    else { chosen = null; $("market").value = j.market.symbol || j.symbol_raw || ""; $("mkt-id").textContent = j.market.market_id; }
+    markUnsure("market", low.has("market"));
+  } else if (j.symbol_raw) {
+    chosen = null; $("market").value = j.symbol_raw; $("mkt-id").textContent = "";
+    markUnsure("market", true);
+  } else {
+    chosen = null; $("market").value = ""; $("mkt-id").textContent = "";
+    if (missing.has("market")) markUnsure("market", true);
+  }
+  if (j.side === "long" || j.side === "short") {
+    const b = $("side").querySelector("[data-side=" + j.side + "]");
+    if (b) b.click();
+  }
+  $("entry").value = ""; $("tp").value = ""; $("sl").value = "";
+  if (j.entry != null) $("entry").value = j.entry;
+  if (j.tp != null) $("tp").value = j.tp;
+  if (j.sl != null) $("sl").value = j.sl;
+  markUnsure("entry", low.has("entry") || missing.has("entry"));
+  markUnsure("tp", low.has("take profit") || missing.has("take profit"));
+  markUnsure("sl", low.has("stop loss") || missing.has("stop loss"));
+  if (j.similar_tf && $("similar-tf")) {
+    $("similar-tf").value = j.similar_tf;
+    markUnsure("similar-tf", low.has("timeframe"));
+  }
+  updateRR();
+  const box = $("shot-review");
+  const bits = [j.review || "Review these fields before you run the test. CHRONOS does not start until you press Run test."];
+  if (j.notes) bits.push(j.notes);
+  box.textContent = bits.join(" ");
+  box.hidden = false;
+  box.className = "shot-review" + ((j.missing || []).length || (j.low_confidence || []).length ? "" : " ok");
+}
+async function readShot() {
+  showShotErr("");
+  if (!shotFile) return showShotErr("Choose a chart screenshot first.");
+  const btn = $("shot-run");
+  btn.disabled = true;
+  btn.querySelector(".spin").hidden = false;
+  btn.querySelector(".txt").textContent = "Reading chart...";
+  try {
+    const fd = new FormData();
+    fd.append("image", shotFile, shotFile.name || "chart.png");
+    const pat = ($("shot-pattern").value || "").trim();
+    if (pat) fd.append("pattern", pat);
+    const r = await fetch("/api/screenshot", { method: "POST", body: fd });
+    const j = await r.json().catch(() => ({ error: "Server returned an invalid response (" + r.status + ")" }));
+    if (!r.ok || j.error) throw new Error(j.error || ("HTTP " + r.status));
+    applyShot(j);
+  } catch (err) { showShotErr(err.message); toast(err.message); }
+  finally {
+    btn.disabled = false;
+    btn.querySelector(".spin").hidden = true;
+    btn.querySelector(".txt").textContent = "Read screenshot";
+  }
+}
+if ($("shot-panel")) {
+  fetch("/api/screenshot").then(r => r.json()).then(j => {
+    if (j && j.enabled === false) { $("shot-on").hidden = true; $("shot-off").hidden = false; }
+  }).catch(() => {});
+  $("shot-picks").addEventListener("click", e => {
+    const b = e.target.closest("button[data-pattern]"); if (!b) return;
+    const cur = ($("shot-pattern").value || "").trim();
+    $("shot-pattern").value = cur === b.dataset.pattern ? "" : b.dataset.pattern;
+    syncPicks();
+  });
+  $("shot-pattern").addEventListener("input", () => { syncPicks(); setupPattern = $("shot-pattern").value.trim(); });
+  $("shot-drop").addEventListener("click", e => { if (e.target.closest("#shot-clear")) return; $("shot-file").click(); });
+  $("shot-drop").addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("shot-file").click(); } });
+  $("shot-file").addEventListener("change", () => { if ($("shot-file").files[0]) setShotFile($("shot-file").files[0]); });
+  $("shot-clear").addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); clearShotFile(); });
+  ["dragenter", "dragover"].forEach(ev => $("shot-drop").addEventListener(ev, e => { e.preventDefault(); $("shot-drop").classList.add("drag"); }));
+  ["dragleave", "drop"].forEach(ev => $("shot-drop").addEventListener(ev, e => { e.preventDefault(); $("shot-drop").classList.remove("drag"); }));
+  $("shot-drop").addEventListener("drop", e => { const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (f) setShotFile(f); });
+  $("shot-run").addEventListener("click", () => readShot());
+  ["market", "entry", "tp", "sl", "similar-tf"].forEach(id => $(id) && $(id).addEventListener("input", () => markUnsure(id, false)));
+}
+
 // ---------- run
 $("f").addEventListener("submit", e => { e.preventDefault(); run(); });
 let hadResult = false;
@@ -139,6 +260,8 @@ async function run() {
   const body = { market: mk, side, entry: +$("entry").value, tp: +$("tp").value, sl: +$("sl").value,
     days: +$("days").value, expiry: $("expiry").value, trend_filter: $("trend").checked, mode,
     insights: mode === "similar" ? false : $("insights").checked };
+  const pat = (($("shot-pattern") && $("shot-pattern").value) || setupPattern || "").trim();
+  if (pat) body.pattern = pat;
   if (mode === "pattern") { body.zone_tf = $("zone-tf").value; body.entry_style = $("entry-style").value; if ($("sl-buf").value !== "") body.sl_buffer_atr = +$("sl-buf").value; }
   if (mode === "similar") {
     body.similar_tf = $("similar-tf").value;
@@ -169,7 +292,8 @@ function render(o) {
   lastResult = o;
   const g = o.setup, s = o.result, m = o.market, p = o.params;
   hadResult = true; $("empty").hidden = true; $("skel").hidden = true; $("res").hidden = false;
-  $("r-title").textContent = `${g.side.toUpperCase()} ${m.market_id}  ·  entry ${fmt(g.entry)}  TP ${fmt(g.tp)}  SL ${fmt(g.sl)}  ·  1:${g.rr.toFixed(2)}`;
+  const patLabel = (o.pattern || ($("shot-pattern") && $("shot-pattern").value) || setupPattern || "").trim();
+  $("r-title").textContent = (patLabel ? patLabel + "  ·  " : "") + `${g.side.toUpperCase()} ${m.market_id}  ·  entry ${fmt(g.entry)}  TP ${fmt(g.tp)}  SL ${fmt(g.sl)}  ·  1:${g.rr.toFixed(2)}`;
   const pat = p.mode === "pattern", sim = p.mode === "similar";
   const windowTxt = `${o.data.days} days tested on ${o.data.interval} candles, ${wat(o.data.from_ms)} to ${wat(o.data.to_ms)} WAT${o.data.days_requested && o.data.days < o.data.days_requested ? ` (asked for ${o.data.days_requested}; that is all the history that exists)` : ""}. `;
   let how;

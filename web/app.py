@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
 """CHRONOS web app. Thin wrapper around ../tester.py (the CLI engine is unchanged).
 
-Read-only: only MFP public keyless market data. Never places orders, uses no API keys.
+Read-only market data: only MFP's public, keyless feed. Never places orders.
+Screenshot reading is optional and uses OPENAI_API_KEY when set.
 """
 import asyncio, json, os, subprocess, sys, tempfile, threading, time
 
 from flask import Flask, g, jsonify, request, send_from_directory
+from werkzeug.exceptions import RequestEntityTooLarge
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ENGINE_DIR = os.path.dirname(HERE)
 sys.path.insert(0, ENGINE_DIR)
+sys.path.insert(0, HERE)
 import tester  # noqa: E402  (engine: load_markets, resolve_market, _fetch_chunks)
+import screenshot as shot  # noqa: E402
 
 RUN_TIMEOUT = int(os.environ.get("TESTER_TIMEOUT", "240"))  # first run of a market may backfill from OKX/Yahoo  # seconds per backtest
 MAX_PARALLEL = int(os.environ.get("TESTER_MAX_PARALLEL", "2"))
@@ -22,10 +26,12 @@ _price_cache = {}  # market_id -> (ts, payload)
 _rate_guard = threading.Lock()
 _heavy_hits = {}       # ip -> [timestamps] in the last minute
 _heavy_inflight = {}   # ip -> current heavy runs
+_shot_hits = {}        # ip -> [timestamps] in the last 24h (screenshot daily cap)
 
 app = Flask(__name__, static_folder=os.path.join(HERE, "static"), static_url_path="/static")
 app.config["DEBUG"] = False
 app.config["ENV"] = "production"
+app.config["MAX_CONTENT_LENGTH"] = shot.MAX_BYTES + 256 * 1024  # 5 MB image plus form overhead
 
 
 def err(msg, code=400):
@@ -50,6 +56,7 @@ def reset_rate_limits():
     with _rate_guard:
         _heavy_hits.clear()
         _heavy_inflight.clear()
+        _shot_hits.clear()
 
 
 def client_ip():
@@ -68,7 +75,7 @@ def client_ip():
 
 
 def rate_limit_heavy():
-    """Per-IP cap on /api/test, /api/compare and /api/scan. Returns a 429 response or None.
+    """Per-IP cap on /api/test, /api/compare, /api/scan and /api/screenshot. Returns a 429 response or None.
 
     Call rate_done_heavy() in a finally block if this returns None.
     """
@@ -101,6 +108,57 @@ def rate_done_heavy():
             _heavy_inflight.pop(ip, None)
         else:
             _heavy_inflight[ip] = n
+
+
+def rate_limit_screenshot_day():
+    """Per-IP daily cap on successful-enough screenshot reads (protects the OpenAI bill).
+
+    Call this after rate_limit_heavy() and after the image has been validated, just
+    before the vision request. Returns a 429 response or None.
+    """
+    ip = getattr(g, "heavy_ip", None) or client_ip()
+    now = time.time()
+    window = 86400
+    limit = shot.daily_limit()
+    with _rate_guard:
+        stale = [k for k, ts in _shot_hits.items() if not ts or now - ts[-1] >= window]
+        for k in stale:
+            _shot_hits.pop(k, None)
+        hits = [t for t in _shot_hits.get(ip, []) if now - t < window]
+        if len(hits) >= limit:
+            return err("daily screenshot limit reached, try again tomorrow", 429)
+        hits.append(now)
+        _shot_hits[ip] = hits
+    return None
+
+
+def pattern_from_body(d):
+    if not isinstance(d, dict):
+        return ""
+    return shot.clean_pattern(d.get("pattern"))
+
+
+def attach_pattern(resp, pattern):
+    """Echo the trader's pattern label on a successful engine JSON response."""
+    if not pattern:
+        return resp
+    body, code = resp if isinstance(resp, tuple) else (resp, 200)
+    if code != 200:
+        return resp
+    try:
+        data = body.get_json()
+    except Exception:
+        return resp
+    if not isinstance(data, dict) or data.get("error"):
+        return resp
+    data["pattern"] = pattern
+    return jsonify(data)
+
+
+@app.errorhandler(413)
+@app.errorhandler(RequestEntityTooLarge)
+def too_large(_e):
+    return err("That image is too large. Use a PNG, JPG or WebP under 5 MB.", 413)
 
 
 def market_lock(mid):
@@ -265,7 +323,7 @@ def index():
 
 @app.get("/api/health")
 def health():
-    return jsonify(ok=True)
+    return jsonify(ok=True, screenshot=shot.enabled())
 
 
 @app.get("/api/markets")
@@ -316,6 +374,57 @@ def price():
     return jsonify(payload)
 
 
+@app.get("/api/screenshot")
+def screenshot_status():
+    out = dict(enabled=shot.enabled(), max_bytes=shot.MAX_BYTES,
+               types=["image/png", "image/jpeg", "image/webp"],
+               daily_limit=shot.daily_limit())
+    if shot.enabled():
+        out["model"] = shot.model_name()
+    return jsonify(out)
+
+
+@app.post("/api/screenshot")
+def read_screenshot():
+    """Read a chart image with OpenAI vision and return fields for the user to review.
+
+    Never starts a backtest. Counts as a heavy request and against the daily cap
+    only once the image is valid and a vision call is about to be made.
+    """
+    if not shot.enabled():
+        return err("Screenshot reading isn't enabled yet", 503)
+    f = request.files.get("image") or request.files.get("file") or request.files.get("screenshot")
+    if f is None:
+        return err("Please attach a chart screenshot.")
+    pattern = shot.clean_pattern(request.form.get("pattern") or request.args.get("pattern"))
+    try:
+        data = f.read()
+    except Exception:
+        return err("Please attach a chart screenshot.")
+    try:
+        shot.validate_image(data, getattr(f, "filename", "") or "")
+    except shot.ScreenshotError as e:
+        return err(e.message, e.status)
+    limited = rate_limit_heavy()
+    if limited:
+        return limited
+    try:
+        day = rate_limit_screenshot_day()
+        if day:
+            return day
+        try:
+            markets = tester.load_markets()
+        except Exception as e:
+            return err(f"could not load MFP markets list: {e}", 502)
+        try:
+            payload = shot.extract_setup(data, getattr(f, "filename", "") or "", pattern, markets)
+        except shot.ScreenshotError as e:
+            return err(e.message, e.status)
+        return jsonify(payload)
+    finally:
+        rate_done_heavy()
+
+
 def _num(d, k):
     v = d.get(k)
     if v is None or v == "":
@@ -362,7 +471,7 @@ def run_test():
             p = parse_test_body(d, require_compare=False)
         except ValueError as e:
             return err(str(e))
-        return run_engine(p, compare=False, timeout=RUN_TIMEOUT)
+        return attach_pattern(run_engine(p, compare=False, timeout=RUN_TIMEOUT), pattern_from_body(d))
     finally:
         rate_done_heavy()
 
@@ -382,7 +491,7 @@ def run_compare():
         p["want_insights"] = False
         n = 1 + len(p["extras"])
         timeout = int(os.environ.get("COMPARE_TIMEOUT", str(max(RUN_TIMEOUT, 120 * n))))
-        return run_engine(p, compare=True, timeout=timeout)
+        return attach_pattern(run_engine(p, compare=True, timeout=timeout), pattern_from_body(d))
     finally:
         rate_done_heavy()
 

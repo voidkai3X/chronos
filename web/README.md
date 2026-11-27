@@ -1,10 +1,10 @@
 # CHRONOS web app
 
-A small web front end for `../tester.py`. You pick an MFP market, a side, entry, TP and SL, and a mode. The default is **Similar moments**: the engine fingerprints the setup's recent candles and replays the same ATR-scaled trade on the closest past windows, then lists match dates and scores. **Every 4h close** and **Pattern only** (an optional rule-based supply/demand retest) are still there. After a single-pair result you can test the same setup on up to 5 other markets, and if the backtest passes (edge or possible edge) you can scan live markets whose current price action looks like the setup.
+A small web front end for `../tester.py`. You pick an MFP market, a side, entry, TP and SL, and a mode. The default is **Similar moments**: the engine fingerprints the setup's recent candles and replays the same ATR-scaled trade on the closest past windows, then lists match dates and scores. **Every 4h close** and **Pattern only** (an optional rule-based supply/demand retest) are still there. You can also upload a chart screenshot; if `OPENAI_API_KEY` is set, CHRONOS reads the pair, side and levels and fills the form for you to review before you run a test. After a single-pair result you can test the same setup on up to 5 other markets, and if the backtest passes (edge or possible edge) you can scan live markets whose current price action looks like the setup.
 
 The CLI is unchanged. The web app calls `tester.py --json --json-out` in a subprocess and returns that JSON. `app.py` loads the engine from the repository root (the parent of this `web/` directory).
 
-Read-only: it uses only MFP's public, keyless market data (`/v1/markets` and the market-data WebSocket). It has no API keys and never places orders.
+Read-only market data: it uses MFP's public, keyless feed (`/v1/markets` and the market-data WebSocket) and never places orders. Screenshot reading is optional and, when enabled, uses only the `OPENAI_API_KEY` environment variable. The key and the uploaded image are not logged or written to disk.
 
 ## Run locally
 
@@ -23,10 +23,13 @@ Environment variables:
 - `COMPARE_TIMEOUT`: seconds for a compare run (up to 6 markets); default is `max(TESTER_TIMEOUT, 120 * markets)`
 - `SCAN_TIMEOUT`: seconds budget note for a live scan, default 180
 - `TESTER_MAX_PARALLEL`: global cap on concurrent engine runs, default 2
-- `RATE_HEAVY_PER_MIN`: max `/api/test`, `/api/compare` and `/api/scan` calls per client IP per minute, default 6
+- `RATE_HEAVY_PER_MIN`: max `/api/test`, `/api/compare`, `/api/scan` and `/api/screenshot` calls per client IP per minute, default 6
 - `RATE_HEAVY_CONCURRENT_PER_IP`: max concurrent heavy runs per client IP, default 1
+- `OPENAI_API_KEY`: optional. When set, the screenshot panel can read a chart image. When unset, the panel says "Screenshot reading isn't enabled yet"
+- `OPENAI_VISION_MODEL`: vision model, default `gpt-4o-mini`
+- `RATE_SCREENSHOT_PER_DAY`: max screenshot reads per client IP per rolling 24 hours, default 20
 
-A public or shared link can otherwise pile up engine runs on the box. Heavy endpoints return 429 when either per-IP cap is hit, or when the global engine cap is busy. The client IP is `request.remote_addr`, except that `CF-Connecting-IP` (or `X-Forwarded-For`) is trusted only when the request itself comes from localhost (the tunnel). Debug mode is off. There are no debug or admin endpoints and no API keys.
+A public or shared link can otherwise pile up engine runs on the box. Heavy endpoints return 429 when either per-IP cap is hit, or when the global engine cap is busy. Screenshot reads also count toward a daily cap. The client IP is `request.remote_addr`, except that `CF-Connecting-IP` (or `X-Forwarded-For`) is trusted only when the request itself comes from localhost (the tunnel). Behind Render, set `TRUST_PROXY=1` so the right-most `X-Forwarded-For` entry is used. Debug mode is off. There are no debug or admin endpoints. The only optional secret is `OPENAI_API_KEY`.
 
 Candles are cached in `../candle_cache/` (shared with the CLI). The first run on a market fetches about 74 days of 15m bars and takes a few seconds to a minute. Repeat runs take under a second.
 
@@ -59,6 +62,15 @@ Candles are cached in `../candle_cache/` (shared with the CLI). The first run on
 - `POST /api/compare` takes the same body as `/api/test`, plus `compare`: a list of 1 to 5 other market names. Insights are not run (too much extra work). The same setup is ATR-scaled onto each market, sequentially. Response is the engine's compare JSON: `compare_rows` (source + others), `compare_pooled`, `compare_summary` (for example `works on 1 of 5, pooled no edge`), `per_market`, `result`, `trades` and `elapsed_s`. More than 5 names returns 400.
 
 - `POST /api/scan` takes the same body as `/api/test`, plus the last backtest `result` (or `verdict`), optional `query` from that backtest, optional `scope` (`family` default), and `force` / `force_scan`. If the backtest did not pass and `force` is not set, the response is `{gated: true, reason, rows: []}`. Otherwise it fingerprints each in-scope market's latest window and returns `rows` (side, pair, limit, single TP, SL, score, distance from price), `generated` (WAT), `forced`, and `skipped`. The page has no force button; `?force_scan=1` on the URL is only for labelled review screenshots.
+
+- `GET /api/screenshot` returns `{enabled, max_bytes, types, daily_limit}` and, when enabled, `model`.
+- `POST /api/screenshot` is a multipart form: `image` (PNG, JPG or WebP, up to 5 MB) and optional `pattern` (free text, max 120 characters). It is a heavy route and also counts against `RATE_SCREENSHOT_PER_DAY`. The image is sent to OpenAI vision, the symbol is mapped onto an MFP market, and the response is the extracted `market`, `side`, `timeframe`, `similar_tf`, `entry`, `tp`, `sl`, `confidence`, `low_confidence`, `missing`, `notes` and a `review` message. Missing prices are `null`. The page fills the form and waits for you to press Run test; it never starts a backtest from this endpoint. Errors:
+  - 400 for a missing or invalid image
+  - 413 if the file is over 5 MB
+  - 422 if the chart could not be read
+  - 429 for the heavy or daily cap
+  - 503 if `OPENAI_API_KEY` is not set ("Screenshot reading isn't enabled yet") or the vision service is busy
+- `POST /api/test` and `/api/compare` accept an optional `pattern` string and echo it back on a successful result as `pattern`, so the label can be shown with the result.
 
 You can also prefill the page from the URL. Adding `run=1` runs the test straight away:
 

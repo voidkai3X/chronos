@@ -1,3 +1,4 @@
 flask>=3.0
 waitress>=3.0
 websockets>=12
+openai>=1.40

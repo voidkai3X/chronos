@@ -10,7 +10,7 @@ CHRONOS replays one trade setup across recent MFP candles and reports how that s
 
 The backtest engine is deterministic and rule-based. A planned insights layer may later reword the engine's numbers; it will not invent results, place orders, or guarantee profit.
 
-Read-only. Candles come first from MFP's public, keyless market-data WebSocket (`wss://api-stream.myfundedperpetuals.com/v1/market-data`), with the public `/v1/markets` list for symbols. Where MFP history is shorter than the 90-day window, older bars are backfilled from public perp feeds (OKX, then Bybit) or, for indices and commodities with no perp, Yahoo Finance and Dukascopy. Every result says which source covered which dates. It needs no API key and never places an order. See [Data sources](#data-sources).
+Read-only. Candles come first from MFP's public, keyless market-data WebSocket (`wss://api-stream.myfundedperpetuals.com/v1/market-data`), with the public `/v1/markets` list for symbols. Where MFP history is shorter than the 90-day window, older bars are backfilled from public perp feeds (OKX, then Bybit) or, for indices and commodities with no perp, Yahoo Finance and Dukascopy. Every result says which source covered which dates. Market data needs no API key and it never places an order. Optional screenshot reading in the web app uses `OPENAI_API_KEY` when set. See [Data sources](#data-sources) and [Run the web app](#run-the-web-app).
 
 This repository is source only. Hosting, GitHub Pages, and deploy workflows are not included.
 
@@ -169,6 +169,8 @@ Environment variables: `PORT` (default 8080), `HOST` (default 0.0.0.0), `TESTER_
 
 The app is a thin wrapper around `tester.py`. It calls the engine with `--json --json-out` and shows the verdict, stats, a cumulative-R equity curve, and every simulated trade. See `web/README.md` for the HTTP API.
 
+You can also upload a chart screenshot (PNG, JPG or WebP, up to 5 MB) and name the pattern (SMC, ICT, order block, and so on). If `OPENAI_API_KEY` is set, CHRONOS sends the image to OpenAI vision (`OPENAI_VISION_MODEL`, default `gpt-4o-mini`) and fills the market, side, timeframe and levels for you to review. It never starts a backtest on its own. Missing prices stay blank; it does not invent levels. If the key is not set, the panel says "Screenshot reading isn't enabled yet" and the rest of the app works as before. The screenshot endpoint uses the same per-IP heavy rate limit as a test, plus a daily cap (`RATE_SCREENSHOT_PER_DAY`, default 20) so a public link cannot run up an unexpected OpenAI bill.
+
 `web/app.py` finds `tester.py` in the repository root (the parent of `web/`).
 
 ## Methodology
@@ -276,6 +278,8 @@ Output includes orders, fills, unfilled orders, TP, SL and time exits; win rate 
 `python tests/test_similar.py` runs offline checks for similar mode: the path is scale-free (a 2x-scaled copy stays close); fingerprints are causal (later bars cannot change an earlier window); overlapping matches are dropped; the query window itself is not traded; results sort by distance; live levels keep the same ATR shape and R:R; and the live-scan gate only opens for a possible or proven edge.
 
 `python tests/test_rate_limit.py` runs offline checks for the web rate limiter: 6 heavy requests per IP per minute then 429; compare/scan share that budget; a second concurrent heavy run from the same IP is rejected; the slot is released afterwards; `CF-Connecting-IP` is trusted only from localhost; and `/` and `/api/health` are not limited.
+
+`python tests/test_screenshot.py` runs offline checks for screenshot reading (OpenAI is mocked): image type and size; fuzzy mapping of symbols such as `USD/JPY` and `BTC` onto MFP markets; missing prices stay blank; the review payload flags low-confidence and missing fields; the endpoint is disabled without `OPENAI_API_KEY`; friendly errors for a bad image or an unreadable chart; the screenshot route shares the heavy per-IP budget; and the daily cap is enforced.
 
 `python tests/test_compare.py` runs offline checks for `--compare`: more than 5 other markets is rejected; transferred levels keep the same ATR shape and R:R at a different price and ATR; pooled closed trades, TP/SL/time exits and total R match the concatenated trade list; and the one-line summary counts only the other pairs.
 
