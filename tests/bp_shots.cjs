@@ -18,6 +18,9 @@ const crypto = require("crypto");
   const page = await desk.newPage();
   const errors = [];
   page.on("pageerror", e => errors.push(e.message));
+  const apiErrors = [];
+  const watchApi = pg => pg.on("response", r => { if (/\/api\//.test(r.url()) && r.status() >= 400) apiErrors.push(`${r.status()} ${r.request().method()} ${r.url().replace(base, "")}`); });
+  watchApi(page);
   const email = `bp-${crypto.randomBytes(5).toString("hex")}@example.com`, pw = "bp-" + crypto.randomBytes(12).toString("hex");
   let created = false;
   try {
@@ -155,7 +158,7 @@ const crypto = require("crypto");
     const state = await desk.storageState();
     const phone = await browser.newContext({ ...devices["Pixel 7"], storageState: state });
     const m = await phone.newPage();
-    m.on("pageerror", e => errors.push(e.message));
+    m.on("pageerror", e => errors.push(e.message)); watchApi(m);
     await m.goto(base + "/replay", { waitUntil: "networkidle" });
     await m.waitForSelector("#rp-live:not([hidden])");
     for (const k of ["bt", "rp", "jn", "lib", "more"]) assert(await m.isVisible(`.nav [data-nav="${k}"]`), "bottom bar item " + k);
@@ -193,6 +196,7 @@ const crypto = require("crypto");
     step("phone: bottom bar, More sheet, no overflow, 44px targets, compare via More");
     await phone.close();
     assert.deepStrictEqual(errors, [], "page errors: " + errors.join(" | "));
+    assert.deepStrictEqual(apiErrors, [], "API errors: " + apiErrors.join(" | "));
     console.log("ALL_OK");
   } finally {
     if (created) {

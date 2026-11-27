@@ -137,6 +137,7 @@ window.CHRONOS_PAGE = {
     opts = opts || {};
     await ready;  // the CSRF token arrives with /api/auth/me
     const init = { method: opts.method || "GET", headers: {}, credentials: "same-origin" };
+    if (state.csrf) init.headers["X-CSRF-Token"] = state.csrf;  // the strategy library checks it on reads too
     if (opts.body !== undefined) { init.headers["Content-Type"] = "application/json"; init.body = JSON.stringify(opts.body); }
     let r;
     try { r = await window.fetch(path, init); } catch (_) { throw Object.assign(new Error("Could not reach CHRONOS. Check your connection."), { status: 0 }); }
