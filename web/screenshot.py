@@ -43,7 +43,7 @@ TF_CANON = {
     "4H": "4h", "H4": "4h", "240": "4h", "240M": "4h",
     "1D": "1d", "D": "1d", "D1": "1d", "DAILY": "1d",
 }
-SIMILAR_TFS = ("15m", "30m", "1h", "4h")  # fingerprint timeframes the tester supports today
+SIMILAR_TFS = ("5m", "15m", "30m", "1h", "4h", "1d")  # setup timeframes the tester supports (Phase 2)
 
 SCHEMA = {
     "type": "object",
@@ -182,7 +182,7 @@ def normalize_side(text):
 
 
 def normalize_timeframe(text):
-    """Return (display, similar_tf_or_None). similar_tf is only 15m/30m/1h/4h."""
+    """Return (display, setup_tf_or_None). setup_tf is one of 5m/15m/30m/1h/4h/1d."""
     if text is None or str(text).strip() == "":
         return None, None
     raw = str(text).strip()
@@ -383,7 +383,7 @@ def build_response(parsed, markets, pattern=""):
                    + ". Use them only if they match your chart.")
     tf = filled.get("timeframe")
     if tf and not parsed.get("similar_tf"):
-        review += f" Chart timeframe is {tf}; the fingerprint is left at its default (15m to 4h are supported)."
+        review += f" Chart timeframe is {tf}; the setup timeframe is left at its default (5m to daily are supported)."
     if filled.get("symbol") and not market:
         review += f" Could not match '{filled['symbol']}' to an MFP market; pick one yourself."
     fields = []

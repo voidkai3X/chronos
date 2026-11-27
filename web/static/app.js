@@ -74,11 +74,14 @@ $("side").addEventListener("click", e => {
 });
 const MODE_HELP = {
   similar: "Finds past moments whose price action looked like your chart, then replays your trade there.",
-  "every-close": "Places your trade shape at every 4h candle close (one at a time). Tests the distances, not the reason for the trade.",
+  "every-close": "Places your trade shape at every close of the setup timeframe (4h by default, one at a time). Tests the distances, not the reason for the trade.",
   pattern: "Only trades retests of supply or demand zones found by fixed rules. Optional; not how most ICT or SMC setups are tested.",
 };
+const TF_DEFAULT = { similar: "1h", "every-close": "4h", pattern: "4h" };
+let tfTouched = false;
 function syncMode() {
   if ($("mode-help")) $("mode-help").textContent = MODE_HELP[mode] || "";
+  if (!tfTouched && $("similar-tf")) $("similar-tf").value = TF_DEFAULT[mode] || "1h";
   if ($("overlap-row")) { $("overlap-row").hidden = mode === "pattern"; if (mode === "pattern") $("overlap").checked = false; }
   $("pattern-opts").hidden = mode !== "pattern";
   $("style-opts").hidden = mode !== "pattern";
@@ -87,6 +90,7 @@ function syncMode() {
   $("expiry").disabled = mode === "pattern";
   $("exp-note").textContent = mode === "pattern" ? "· not used in pattern mode" : "";
 }
+if ($("similar-tf")) $("similar-tf").addEventListener("change", () => { tfTouched = true; });
 $("mode").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
   mode = b.dataset.mode;
@@ -232,7 +236,7 @@ function applyShot(j) {
   markUnsure("sl", low.has("stop loss") || missing.has("stop loss"));
   if (j.similar_tf && $("similar-tf")) {
     if (mode !== "similar") $("mode").querySelector('[data-mode="similar"]').click();
-    $("similar-tf").value = j.similar_tf;
+    $("similar-tf").value = j.similar_tf; tfTouched = true;
     markUnsure("similar-tf", low.has("timeframe"));
   }
   updateRR();
@@ -341,11 +345,14 @@ function tickBusy() {
 }
 function setBusy(b) {
   $("run").disabled = b; $("run").querySelector(".spin").hidden = !b;
-  $("run").querySelector(".txt").textContent = b ? "Running backtest..." : "Run test";
+  const cmpView = document.body.classList.contains("view-cmp");
+  $("run").querySelector(".txt").textContent = b ? (cmpView ? "Running strategies..." : "Running backtest...") : (cmpView ? "Compare strategies" : "Run test");
   $("skel").hidden = !b;
+  if (b && $("strat-res")) $("strat-res").hidden = true;
   clearInterval(busyTimer); busyTimer = null;
   if (b) { busyT0 = Date.now(); tickBusy(); busyTimer = setInterval(tickBusy, 1000); $("res-err").hidden = true; }
   if (b) { $("empty").hidden = true; $("res").hidden = true; }
+  else if (window.P2 && window.P2.showingStrategies()) $("empty").hidden = true;
   else if (!hadResult) $("empty").hidden = false; else $("res").hidden = false;
   if (b && window.matchMedia("(max-width: 980px)").matches) $("results").scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -373,6 +380,7 @@ function showResErr(msg, status) {
 }
 async function run() {
   showErr("");
+  if (document.body.classList.contains("view-cmp") && window.P2) return window.P2.runStrategies();
   const mk = chosen ? chosen.market_id : $("market").value.trim();
   if (!mk) return showErr("Pick a market.");
   const le = levelError();
@@ -388,7 +396,10 @@ async function run() {
     slippage: slip, slippage_unit: $("slip-unit").value, allow_overlap: mode !== "pattern" && $("overlap").checked };
   const pat = (($("shot-pattern") && $("shot-pattern").value) || setupPattern || "").trim();
   if (pat) body.pattern = pat;
-  if (mode === "pattern") { body.zone_tf = $("zone-tf").value; body.entry_style = $("entry-style").value; if ($("sl-buf").value !== "") body.sl_buffer_atr = +$("sl-buf").value; }
+  body.tf = $("similar-tf").value;
+  if ($("htf")) body.htf_confirm = $("htf").value;
+  if ($("tf-sweep") && $("tf-sweep").checked) body.tf_sweep = true;
+  if (mode === "pattern") { body.zone_tf = body.tf; body.entry_style = $("entry-style").value; if ($("sl-buf").value !== "") body.sl_buffer_atr = +$("sl-buf").value; }
   if (mode === "similar") {
     body.similar_tf = $("similar-tf").value;
     body.similar_bars = +$("similar-bars").value || 24;
@@ -421,6 +432,7 @@ function render(o) {
   lastResult = o;
   const g = o.setup, s = o.result, m = o.market, p = o.params;
   hadResult = true; $("empty").hidden = true; $("skel").hidden = true; $("res").hidden = false;
+  if ($("strat-res")) $("strat-res").hidden = true;
   const patLabel = (o.pattern || ($("shot-pattern") && $("shot-pattern").value) || setupPattern || "").trim();
   $("r-title").textContent = (patLabel ? patLabel + "  ·  " : "") + `${g.side.toUpperCase()} ${m.market_id}  ·  entry ${fmt(g.entry)}  TP ${fmt(g.tp)}  SL ${fmt(g.sl)}  ·  1:${g.rr.toFixed(2)}`;
   const pat = p.mode === "pattern", sim = p.mode === "similar";
@@ -436,10 +448,12 @@ function render(o) {
       : `Replayed as a limit at the near edge of each fresh ${g.side === "short" ? "supply" : "demand"} area on ${p.zone_tf} candles, ` +
       `stop ${p.sl_buffer_atr.toFixed(2)} ATR beyond the far edge (${p.sl_buffer_source.how}), target ${g.rr.toFixed(2)}R. Time stop ${p.max_hold}`);
   } else {
-    how = `${windowTxt}Price at test ${fmt(g.ref)}, 4h ATR ${fmt(g.atr, 4)}. Replayed as entry ${g.entry_atr >= 0 ? "+" : ""}${g.entry_atr.toFixed(2)} ATR (${g.entry_type}), ` +
+    const atf = p.setup_tf || "4h";
+    how = `EVERY ${atf.toUpperCase()} CLOSE. ${windowTxt}Price at test ${fmt(g.ref)}, ${atf} ATR ${fmt(g.atr, 4)}. Replayed as entry ${g.entry_atr >= 0 ? "+" : ""}${g.entry_atr.toFixed(2)} ATR (${g.entry_type}), ` +
       `stop ${g.risk_atr.toFixed(2)} ATR, target ${g.reward_atr.toFixed(2)} ATR. Expiry ${p.expiry}, time stop ${p.max_hold}`;
   }
-  $("r-sub").textContent = how + (p.trend_filter ? ", trend filter on." : ".");
+  const htfTxt = p.htf_confirm && p.htf_confirm !== "off" && o.htf ? ` Higher-timeframe confirmation on ${p.htf_confirm}: ${o.htf.rejected} of ${o.htf.checked} setups skipped because the ${p.htf_confirm} trend did not agree.` : "";
+  $("r-sub").textContent = how + (p.trend_filter ? ", trend filter on." : ".") + htfTxt;
   const [cls, label] = badgeFor(s.verdict);
   $("badge").className = "badge " + cls; $("badge").textContent = label;
   $("verdict-card").className = "verdict-card " + cls;
@@ -494,6 +508,8 @@ function render(o) {
   $("meta").textContent = `Fees: ${o.fees.commission_pct_per_fill}% per fill + ${o.fees.swap_pct_per_day}%/day swap (${o.fees.asset_class}, MFP standard). ` +
     `Slippage: ${slipTxt} (${p.slippage_rule || "market-type fills"}). ` +
     `${p.one_at_a_time === false ? "Overlapping trades allowed." : "One order or trade at a time."} ` +
+    (p.htf_rule ? `HTF confirmation: ${p.htf_rule}. ` : "") +
+    `Setup timeframe ${p.setup_tf || "-"}, fills on ${p.interval || o.data.interval} candles. ` +
     `Tie rule: ${p.tie_rule}. Look-ahead: ${p.lookahead_rule || "only closed candles are used"}. Placement: ${p.placement}. ` +
     `Generated ${o.generated.replace("T", " ").replace("Z", " UTC")}` + (o.elapsed_s != null ? `, ran in ${o.elapsed_s}s.` : ".");
   renderProvenance(o.data);
@@ -505,6 +521,7 @@ function render(o) {
   drawHist(o);
   setupCompare(o);
   setupScan(o);
+  document.dispatchEvent(new CustomEvent("chronos:result", { detail: o }));
 }
 const sgnPct = x => x == null ? "-" : (x > 0 ? "+" : "") + Number(x).toFixed(1) + "%";
 function renderDQ(dq) {
@@ -628,6 +645,8 @@ const TRADE_COLS = [
   { k: "r_net", t: "R net", v: r => r.t.r_net ?? -1e9, f: r => r.t.r_net == null ? "" : `<b class="${r.t.r_net > 0 ? "pos" : "neg"}">${sgnR(r.t.r_net)}</b>`, r: 1 },
   { k: "hours", t: "Duration", v: r => r.t.hours ?? -1, f: r => durTxt(r.t.hours), r: 1 },
   { k: "source", t: "Candles", v: r => r.t.source || "", f: r => `<span class="muted">${srcLabel(r.t.source)} ${r.t.interval || ""}</span>` },
+  { k: "replay", t: "Replay", v: r => r.i, f: r => ["tp", "sl", "time"].includes(r.t.status) && r.t.candle_window
+      ? `<button type="button" class="btn-ghost sm rp-open" data-i="${r.i - 1}" aria-label="Replay trade ${r.i}">Replay</button>` : "" },
 ];
 function renderTrades(tr, md) {
   tradeMode = md;
@@ -659,7 +678,9 @@ function drawTrades() {
   $("t-count").textContent = `${tradeRows.length} orders · ${nClosed} closed`;
 }
 $("trades").addEventListener("click", e => {
-  const th = e.target.closest("th[data-k]"); if (!th) return;
+  const rb = e.target.closest(".rp-open");
+  if (rb) { if (window.P2) window.P2.openReplay(lastResult, +rb.dataset.i); return; }
+  const th = e.target.closest("th[data-k]"); if (!th || th.dataset.k === "replay") return;
   const k = th.dataset.k;
   tradeSort = tradeSort.key === k ? { key: k, dir: -tradeSort.dir } : { key: k, dir: 1 };
   drawTrades();
@@ -1058,8 +1079,10 @@ function applyQuery() {
     const btn = $("mode").querySelector(`[data-mode="${q.get("mode")}"]`);
     if (btn) btn.click();
   }
-  if (q.get("zone_tf")) $("zone-tf").value = q.get("zone_tf");
-  if (q.get("similar_tf")) $("similar-tf").value = q.get("similar_tf");
+  const qtf = q.get("tf") || q.get("zone_tf") || q.get("similar_tf");
+  if (qtf && [...$("similar-tf").options].some(o => o.value === qtf)) { $("similar-tf").value = qtf; tfTouched = true; }
+  if (["1h", "4h", "1d"].includes(q.get("htf"))) $("htf").value = q.get("htf");
+  if (q.get("tf_sweep") === "1") $("tf-sweep").checked = true;
   if (q.get("similar_bars")) $("similar-bars").value = q.get("similar_bars");
   if (["limit", "sweep", "confirm"].includes(q.get("entry_style"))) $("entry-style").value = q.get("entry_style");
   if (q.get("insights") === "0") $("insights").checked = false;
@@ -1070,6 +1093,10 @@ function applyQuery() {
   updateRR();
   if (q.get("run") === "1") run();
 }
+window.CHRONOS = { $, fmt, px, pct, sgnR, sgnPct, wat, esc, durTxt, srcLabel, sizeCanvas, niceStep, toast, setBusy,
+  showErr, showResErr, levelError, card, EXIT_LBL, STATUS_LBL,
+  getMarket: () => (chosen ? chosen.market_id : $("market").value.trim()),
+  getSide: () => side, getResult: () => lastResult };
 })();
 
 /* Small live UTC clock in the hero (display only). */

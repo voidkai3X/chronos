@@ -221,9 +221,13 @@ def parse_test_body(d, require_compare=False):
     mode = str(d.get("mode") or "similar").lower()
     if mode not in ("every-close", "pattern", "similar"):
         raise ValueError("mode must be 'similar', 'every-close' or 'pattern'")
-    similar_tf = str(d.get("similar_tf") or "1h").lower()
-    if similar_tf not in ("15m", "30m", "1h", "4h"):
-        raise ValueError("similar_tf must be 15m, 30m, 1h or 4h")
+    TFS = tester.SETUP_TFS
+    setup_tf = str(d.get("tf") or "").lower() or None  # one setup timeframe for any mode (Phase 2)
+    if setup_tf is not None and setup_tf not in TFS:
+        raise ValueError("tf must be 5m, 15m, 30m, 1h, 4h or 1d")
+    similar_tf = str((setup_tf if mode == "similar" else None) or d.get("similar_tf") or "1h").lower()
+    if similar_tf not in TFS:
+        raise ValueError("similar_tf must be 5m, 15m, 30m, 1h, 4h or 1d")
     try:
         similar_bars = int(d.get("similar_bars") or 24)
     except (TypeError, ValueError):
@@ -236,9 +240,26 @@ def parse_test_body(d, require_compare=False):
         raise ValueError("similar_k must be a number")
     if not 5 <= similar_k <= 80:
         raise ValueError("similar_k must be between 5 and 80")
-    zone_tf = str(d.get("zone_tf") or "4h").lower()
-    if zone_tf not in ("30m", "1h", "4h"):
-        raise ValueError("zone_tf must be 30m, 1h or 4h")
+    zone_tf = str((setup_tf if mode == "pattern" else None) or d.get("zone_tf") or "4h").lower()
+    if zone_tf not in TFS:
+        raise ValueError("zone_tf must be 5m, 15m, 30m, 1h, 4h or 1d")
+    close_tf = str((setup_tf if mode == "every-close" else None) or "4h")
+    eff_tf = {"similar": similar_tf, "pattern": zone_tf}.get(mode, close_tf)
+    interval = tester.exec_interval_for(eff_tf)
+    htf = str(d.get("htf_confirm") or "off").lower()
+    if htf not in ("off",) + tester.HTF_CHOICES:
+        raise ValueError("htf_confirm must be off, 1h, 4h or 1d")
+    if htf != "off" and tester.STEP[htf] <= tester.STEP[eff_tf]:
+        raise ValueError(f"higher-timeframe confirmation ({htf}) must be a higher timeframe than the setup ({eff_tf})")
+    sweep = d.get("tf_sweep")
+    if sweep in (True, "1", 1, "true", "all"):
+        sweep = list(TFS)
+    elif isinstance(sweep, list):
+        sweep = [str(x).lower() for x in sweep]
+        if not all(x in TFS for x in sweep) or not 2 <= len(set(sweep)) <= len(TFS):
+            raise ValueError("tf_sweep must list 2 to 6 of 5m, 15m, 30m, 1h, 4h, 1d")
+    else:
+        sweep = None
     entry_style = str(d.get("entry_style") or "limit").lower()
     if entry_style not in tester.ENTRY_STYLES:
         raise ValueError("entry_style must be limit, sweep or confirm")
@@ -295,7 +316,8 @@ def parse_test_body(d, require_compare=False):
                 trend=trend, mode=mode, zone_tf=zone_tf, entry_style=entry_style,
                 similar_tf=similar_tf, similar_bars=similar_bars, similar_k=similar_k,
                 want_insights=want_insights, slb=slb, extras=extras,
-                slip_unit=slip_unit, slip=slip, allow_overlap=allow_overlap)
+                slip_unit=slip_unit, slip=slip, allow_overlap=allow_overlap,
+                setup_tf=eff_tf, close_tf=close_tf, interval=interval, htf=htf, tf_sweep=sweep)
 
 
 def engine_cmd(p, json_path, compare=False):
@@ -303,6 +325,11 @@ def engine_cmd(p, json_path, compare=False):
     cmd = [sys.executable, os.path.join(ENGINE_DIR, "tester.py"), m["market_id"], p["side"],
            f"--entry={p['entry']!r}", f"--tp={p['tp']!r}", f"--sl={p['sl']!r}", "--days", str(p["days"]),
            "--json", "--json-out", json_path, "--mode", p["mode"]] + (["--trend-filter"] if p["trend"] else [])
+    cmd += ["--interval", p.get("interval") or "15m"]
+    if p.get("htf") and p["htf"] != "off":
+        cmd += ["--htf-confirm", p["htf"]]
+    if p.get("tf_sweep"):
+        cmd += ["--tf-sweep", ",".join(p["tf_sweep"])]
     if p["mode"] == "pattern":
         cmd += ["--zone-tf", p["zone_tf"], "--entry-style", p["entry_style"]]
         if p["slb"] is not None:
@@ -311,7 +338,7 @@ def engine_cmd(p, json_path, compare=False):
         cmd += ["--expiry", p["expiry"], "--similar-tf", p["similar_tf"],
                 "--similar-bars", str(p["similar_bars"]), "--similar-k", str(p["similar_k"])]
     else:
-        cmd += ["--expiry", p["expiry"]]
+        cmd += ["--expiry", p["expiry"], "--setup-tf", p.get("close_tf") or "4h"]
     if p.get("slip_unit") == "ticks" and p.get("slip"):
         cmd += [f"--slippage-ticks={p['slip']!r}"]
     else:
@@ -325,7 +352,7 @@ def engine_cmd(p, json_path, compare=False):
     return cmd
 
 
-def run_engine(p, compare=False, timeout=None):
+def run_engine(p, compare=False, timeout=None, cmd_fn=None):
     timeout = timeout or RUN_TIMEOUT
     ids = [p["market"]["market_id"]] + [x["market_id"] for x in p.get("extras") or []]
     # lock markets in sorted order so two compare requests cannot deadlock
@@ -340,7 +367,7 @@ def run_engine(p, compare=False, timeout=None):
             got.append(lk)
         with tempfile.TemporaryDirectory() as td:
             jp = os.path.join(td, "out.json")
-            cmd = engine_cmd(p, jp, compare=compare)
+            cmd = cmd_fn(jp, td) if cmd_fn else engine_cmd(p, jp, compare=compare)
             t0 = time.time()
             try:
                 proc = subprocess.run(cmd, cwd=ENGINE_DIR, capture_output=True, text=True, timeout=timeout)
@@ -389,7 +416,7 @@ def _html_page(name):
     with open(path, encoding="utf-8") as f:
         html = f.read()
     ver = _ASSET_V
-    for asset in ("style.css", "app.js", "account.js", "auth.js"):
+    for asset in ("style.css", "app.js", "p2.js", "account.js", "auth.js"):
         attr = "href" if asset.endswith(".css") else "src"
         html = html.replace(f'{attr}="/static/{asset}"', f'{attr}="/static/{asset}?v={ver}"', 1)
     resp = app.response_class(html, mimetype="text/html; charset=utf-8")
@@ -575,9 +602,132 @@ def run_test():
             p = parse_test_body(d, require_compare=False)
         except ValueError as e:
             return err(str(e))
-        return attach_pattern(run_engine(p, compare=False, timeout=RUN_TIMEOUT), pattern_from_body(d))
+        timeout = RUN_TIMEOUT + (len(p["tf_sweep"]) * SWEEP_PER_TF if p.get("tf_sweep") else 0)
+        if p.get("tf_sweep"):
+            p["want_insights"] = False  # a sweep already reruns the test up to 6 times
+        return attach_pattern(run_engine(p, compare=False, timeout=timeout), pattern_from_body(d))
     finally:
         rate_done_heavy()
+
+
+SWEEP_PER_TF = int(os.environ.get("SWEEP_PER_TF_TIMEOUT", "90"))
+STRATEGY_TIMEOUT = int(os.environ.get("STRATEGY_TIMEOUT", "90"))  # per strategy in a comparison
+
+
+def parse_strategies_body(d):
+    """Validate /api/strategies: the usual setup fields + 2-6 strategies. Returns (p, spec)."""
+    import strategy_compare as SC
+    if not isinstance(d, dict):
+        raise ValueError("send a JSON body with market, side, entry, tp, sl and strategies")
+    base = {k: v for k, v in d.items() if k not in ("strategies", "mode", "tf_sweep", "compare")}
+    base["mode"] = "similar"
+    p = parse_test_body(dict(base, tf=d.get("tf") or "1h"), require_compare=False)
+    spec = dict(market=p["market"]["market_id"], side=p["side"], entry=p["entry"], tp=p["tp"], sl=p["sl"],
+                days=p["days"], tf=p["setup_tf"], slippage=p["slip"], slippage_unit=p["slip_unit"],
+                htf_confirm=p["htf"], expiry=p["expiry"], max_hold="7d", strategies=d.get("strategies"))
+    SC.validate(spec)
+    return p, spec
+
+
+@app.post("/api/strategies")
+def run_strategies():
+    """Strategy comparison: 2-6 setups under identical conditions (same market, window, costs, timeframe)."""
+    limited = rate_limit_heavy()
+    if limited:
+        return limited
+    try:
+        d = request.get_json(silent=True)
+        try:
+            p, spec = parse_strategies_body(d)
+        except ValueError as e:
+            return err(str(e))
+
+        def cmd(jp, td):
+            sp = os.path.join(td, "spec.json")
+            with open(sp, "w") as f:
+                json.dump(spec, f)
+            return [sys.executable, os.path.join(ENGINE_DIR, "strategy_compare.py"), sp, jp]
+        timeout = RUN_TIMEOUT + STRATEGY_TIMEOUT * len(spec["strategies"])
+        return run_engine(p, timeout=timeout, cmd_fn=cmd)
+    finally:
+        rate_done_heavy()
+
+
+@app.get("/api/strategy-types")
+def strategy_types():
+    import strategy_compare as SC
+    import strategies as R
+    return jsonify(types={k: dict(label=v["label"], kind=v["kind"], note=v["note"],
+                                  params=(R.RULES[v["rule"]]["params"] if v.get("rule") else {}),
+                                  bounds=(R.RULES[v["rule"]]["bounds"] if v.get("rule") else {}))
+                          for k, v in SC.TYPES.items()},
+                   named={k: dict(type=v[0], how=v[1]) for k, v in SC.NAMED.items()},
+                   min=SC.MIN_STRATEGIES, max=SC.MAX_STRATEGIES)
+
+
+# ---------------------------------------------------------------- trade replay: the stored candles of one trade
+REPLAY_MAX_BARS = 3000
+RATE_CANDLES_PER_MIN = int(os.environ.get("RATE_CANDLES_PER_MIN", "40"))
+_candle_hits = {}
+
+
+def _int_arg(name):
+    v = request.args.get(name)
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        raise ValueError(f"{name} must be a whole number of milliseconds") from None
+
+
+@app.get("/api/candles")
+def replay_candles():
+    """Candles for a trade replay. Loads the same range the backtest loaded (load_from..load_to) so the merged
+    series is identical, then returns only from..to. Real stored candles only; nothing is filled in."""
+    gated = auth.gate_tools()
+    if gated:
+        return gated
+    ip, now = client_ip(), time.time()
+    with _rate_guard:
+        hits = [t for t in _candle_hits.get(ip, []) if now - t < 60]
+        if len(hits) >= RATE_CANDLES_PER_MIN:
+            return err("too many replay requests from your network, try again in a minute", 429)
+        hits.append(now)
+        _candle_hits[ip] = hits
+    try:
+        mid = str(request.args.get("market") or "")
+        interval = str(request.args.get("interval") or "15m")
+        if interval not in ("5m", "15m", "30m", "1h"):
+            raise ValueError("interval must be 5m, 15m, 30m or 1h")
+        lo, hi = _int_arg("from"), _int_arg("to")
+        lf = _int_arg("load_from") if request.args.get("load_from") else lo
+        lt = _int_arg("load_to") if request.args.get("load_to") else hi
+        step = tester.STEP[interval]
+        if not (lo < hi) or (hi - lo) // step > REPLAY_MAX_BARS:
+            raise ValueError(f"the window must be 1 to {REPLAY_MAX_BARS} candles")
+        if not (lf <= lo and lt >= hi - step) or lt - lf > 400 * 86400_000:
+            raise ValueError("load range must contain the window and be at most 400 days")
+        m = next((x for x in tester.load_markets() if x["market_id"] == mid), None)
+        if m is None:
+            m = resolve(mid)
+    except ValueError as e:
+        return err(str(e))
+    import sources
+    lk = market_lock(m["market_id"])
+    if not lk.acquire(timeout=20):
+        return err("server busy with other tests, try again in a moment", 429)
+    try:
+        bars, prov = sources.load(m, interval, lf, lt, kind=tester.asset_class(m), use_backups=True)
+    except Exception as e:
+        msg = sources.friendly_source_error(e)
+        return err(msg or "Market data is unavailable right now, try again in a minute", 503)
+    finally:
+        lk.release()
+    rows = [[b[0], b[1], b[2], b[3], b[4]] for b in bars if lo <= b[0] < hi]
+    segs = [dict(source=sg["source"], label=sg.get("label"), from_ms=sg["from_ms"], to_ms=sg["to_ms"])
+            for sg in prov.get("segments") or [] if sg["from_ms"] < hi and sg["to_ms"] > lo]
+    resp = jsonify(market_id=m["market_id"], interval=interval, from_ms=lo, to_ms=hi, candles=rows, sources=segs)
+    resp.headers["Cache-Control"] = "private, max-age=300"
+    return resp
 
 
 @app.post("/api/compare")
@@ -622,6 +772,8 @@ def _run_scan():
         p = parse_test_body(d, require_compare=False)
     except ValueError as e:
         return err(str(e))
+    if p["similar_tf"] not in ("15m", "30m", "1h", "4h"):
+        return err("the live scan works with 15m, 30m, 1h or 4h fingerprints")
     result = d.get("result") if isinstance(d.get("result"), dict) else None
     if result is None and isinstance(d.get("verdict"), str):
         result = dict(verdict=d["verdict"])

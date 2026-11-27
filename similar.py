@@ -23,7 +23,7 @@ SCORE_TAU = 0.75           # score = 100 * exp(-distance / tau)
 SCAN_TOP = 10
 MIN_SCORE_LIVE = 0.0       # report the closest; the UI still shows the score
 
-HTF_OF = {"5m": "30m", "15m": "1h", "30m": "1h", "1h": "4h", "4h": "4h"}
+HTF_OF = {"5m": "30m", "15m": "1h", "30m": "1h", "1h": "4h", "4h": "4h", "1d": "4h"}
 
 # path carries most of the weight; features break ties and reject wrong regimes
 PATH_WEIGHT = 0.60
@@ -288,7 +288,7 @@ def search(zb, atr, step, query, n, k=SIMILAR_K, start_ms=None, end_ms=None, htf
 def replay_similar(base, g, tf=SIMILAR_TF, n=SIMILAR_BARS, k=SIMILAR_K, expiry_ms=72 * 3600_000,
                    start_ms=None, end_ms=None, fee_pct=0.0, swap_pct_day=0.0, max_hold_ms=None,
                    sweep_window_ms=None, sweep_atr=1.0, trend_filter=False, interval="15m",
-                   query=None, exclude_query=True, slip_bps=0.0, slip_abs=0.0, allow_overlap=False):
+                   query=None, exclude_query=True, slip_bps=0.0, slip_abs=0.0, allow_overlap=False, gate=None):
     """Find similar windows and place the setup's ATR geometry at each, oldest first, one trade at a time.
 
     query: a fingerprint from the source setup (required for other markets; on the source market
@@ -326,6 +326,10 @@ def replay_similar(base, g, tf=SIMILAR_TF, n=SIMILAR_BARS, k=SIMILAR_K, expiry_m
             # a previous similar trade is still live — skip (one at a time)
             m = dict(m, skipped="busy")
             placed_matches.append(m)
+            continue
+        if gate is not None and not gate.ok(t):
+            placed_matches.append(dict(m, skipped="htf"))
+            skipped += 1
             continue
         # 4h ATR known at t (last complete 4h bar)
         h = 0

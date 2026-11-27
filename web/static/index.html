@@ -53,6 +53,11 @@
 <main class="wrap" id="view-bt" role="tabpanel" aria-labelledby="tab-bt">
   <section class="panel form-panel" aria-labelledby="setup-h">
     <div class="panel-title"><h2 id="setup-h">Your setup</h2><span class="step-hint">Screenshot or type · Review · Run</span></div>
+    <div class="toggle seg view-seg" id="view-seg" role="group" aria-label="What to do">
+      <button type="button" data-view="test" class="on">Test a setup</button>
+      <button type="button" data-view="cmp">Compare strategies</button>
+    </div>
+    <p class="help view-help" id="view-help" hidden>Run 2 to 6 strategies on the same market, window, timeframe, fees and slippage, then compare them side by side. Your levels set the market, side and R:R.</p>
     <form id="f" autocomplete="off" novalidate>
       <div id="shot-panel" class="shot-panel">
         <label class="lbl" id="shot-h">From a screenshot</label>
@@ -117,39 +122,48 @@
         <span class="lbl">How to find past setups</span>
         <div class="toggle seg" id="mode" role="group" aria-label="How to find past setups">
           <button type="button" data-mode="similar" class="on">Similar moments</button>
-          <button type="button" data-mode="every-close">Every 4h close</button>
+          <button type="button" data-mode="every-close">Every candle close</button>
           <button type="button" data-mode="pattern">Pattern only</button>
         </div>
         <p class="help" id="mode-help">Finds past moments whose price action looked like your chart, then replays your trade there.</p>
       </div>
 
-      <div id="similar-opts" class="grid2 sub-opts">
-        <div>
-          <label class="lbl" for="similar-tf">Fingerprint timeframe</label>
-          <div class="sel"><select id="similar-tf">
-            <option value="15m">15m</option><option value="30m">30m</option>
-            <option value="1h" selected>1h</option><option value="4h">4h</option>
-          </select></div>
+      <div class="tf-block" id="tf-block">
+        <div class="grid2">
+          <div>
+            <label class="lbl" for="similar-tf">Setup timeframe</label>
+            <div class="sel"><select id="similar-tf">
+              <option value="5m">5m</option><option value="15m">15m</option><option value="30m">30m</option>
+              <option value="1h" selected>1h</option><option value="4h">4h</option><option value="1d">Daily</option>
+            </select></div>
+          </div>
+          <div>
+            <label class="lbl" for="htf">Higher-timeframe confirmation</label>
+            <div class="sel"><select id="htf">
+              <option value="off" selected>Off</option><option value="1h">1h trend must agree</option>
+              <option value="4h">4h trend must agree</option><option value="1d">Daily trend must agree</option>
+            </select></div>
+          </div>
         </div>
+        <p class="help" id="tf-help">The chart timeframe of your setup. 5m setups are simulated on 5m candles, all others on 15m candles. Daily setups use daily candles built from 15m data, so a 90-day window holds only about 90 of them.</p>
+        <p class="help" id="htf-help">Optional. Only takes a setup when the higher timeframe agrees: on its last closed candle, price is above a rising EMA(20) for a long (below a falling one for a short). Only candles already closed at the signal are used.</p>
+        <label class="chk" id="tfs-row"><input id="tf-sweep" type="checkbox"><span class="box" aria-hidden="true"></span><span>Also run on every timeframe <span class="muted">5m, 15m, 30m, 1h, 4h and daily under identical conditions, then compare them (takes longer)</span></span></label>
+      </div>
+
+      <div id="similar-opts" class="grid2 sub-opts">
         <div>
           <label class="lbl" for="similar-bars">Candles in the fingerprint</label>
           <input id="similar-bars" type="number" min="8" max="96" step="1" value="24" inputmode="numeric">
         </div>
-        <p class="help span2">The chart timeframe and how many candles before your setup to compare. 24 x 1h is about one day of structure.</p>
+        <p class="help span2">How many setup-timeframe candles before your setup to compare. 24 x 1h is about one day of structure. On daily, use 8 to 10.</p>
       </div>
 
       <div id="pattern-opts" class="grid2 sub-opts" hidden>
         <div>
-          <label class="lbl" for="zone-tf">Pattern timeframe</label>
-          <div class="sel"><select id="zone-tf">
-            <option value="30m">30m</option><option value="1h">1h</option><option value="4h" selected>4h</option>
-          </select></div>
-        </div>
-        <div>
           <label class="lbl" for="sl-buf">SL buffer (ATR past the far edge)</label>
           <input id="sl-buf" type="number" step="0.05" min="0" max="10" placeholder="auto" inputmode="decimal">
         </div>
-        <p class="help span2">Zones are found on this timeframe. The stop sits this many ATR (average candle range) beyond the zone. Leave blank to copy the distance from your own stop.</p>
+        <p class="help span2">Zones are found on the setup timeframe. The stop sits this many ATR (average candle range) beyond the zone. Leave blank to copy the distance from your own stop.</p>
       </div>
 
       <div id="style-opts" class="sub-opts" hidden>
@@ -188,6 +202,19 @@
       <label class="chk"><input id="trend" type="checkbox"><span class="box" aria-hidden="true"></span><span>Trend filter <span class="muted">only place when the 4h EMA50 slope agrees with the side</span></span></label>
       <label class="chk" id="insights-row"><input id="insights" type="checkbox"><span class="box" aria-hidden="true"></span><span>Insights <span class="muted">explain the result and compare limit / wider stop / sweep / confirm entries (a few seconds more; pattern-oriented)</span></span></label>
 
+      <div class="strat-block" id="strat-block" hidden>
+        <span class="lbl">Strategies to compare</span>
+        <div id="strat-list" class="strat-list"></div>
+        <button type="button" class="btn-ghost" id="strat-add">Add a strategy</button>
+        <p class="help" id="strat-limit"></p>
+        <details class="note strat-named">
+          <summary>Which named patterns CHRONOS can test</summary>
+          <ul id="strat-named"></ul>
+          <p>Any other name works as a label on one of these rules or on your own levels. CHRONOS can't test a pattern it can't define as a rule, so it won't pretend to.</p>
+        </details>
+        <p class="help">Saved on this device only. Saving to your account comes with the strategy library.</p>
+      </div>
+
       <div class="costs-block">
         <span class="lbl">Costs and execution</span>
         <p class="help">MFP trading fees and overnight swap are always included. Slippage is the extra price lost on market-type fills: market or stop entries, stop-loss exits and time exits. Limit entries and take profits fill at their own price. 1 bps = 0.01% of price; ticks use the market's tick size.</p>
@@ -217,8 +244,12 @@
       volatility, swing distance, sweeps and impulse. It then searches the past of the same market for the closest
       non-overlapping windows, places your entry, stop and single target scaled by 4h ATR, and reports a similarity
       score and the date of each match so you can check them on a chart.</p>
-      <p><b>Every 4h close:</b> your entry, stop and target become a shape scaled by 4h ATR, placed at every 4h close
-      (one order or trade at a time). It tests the distances, not the reason you took the trade.</p>
+      <p><b>Every candle close:</b> your entry, stop and target become a shape scaled by the setup timeframe's ATR,
+      placed at every close of that timeframe (4h by default; one order or trade at a time). It tests the distances,
+      not the reason you took the trade.</p>
+      <p><b>Timeframes:</b> the setup timeframe (5m to daily) sets where setups are looked for. Fills are always
+      simulated on the finest reliable candles: 5m for 5m setups, 15m for everything else. Higher-timeframe
+      confirmation reads only higher-timeframe candles already closed at the signal.</p>
       <p><b>Pattern only:</b> a rule-based approximation of supply or demand zones (1-6 small candles, then a strong
       move of at least 1 ATR away). When price is away from a fresh zone it rests a limit at the near edge, stop beyond
       the far edge, target at your R:R. This is optional and is not how most order-flow, ICT or SMC setups are tested.
@@ -293,6 +324,21 @@
       <div class="panel why-panel" id="why-panel">
         <div class="panel-h"><span>Why it worked or failed</span><span class="muted small">computed from this test's trades</span></div>
         <ul class="why-list" id="why-list"></ul>
+      </div>
+
+      <div class="panel cond-panel" id="cond-panel" hidden>
+        <div class="panel-h"><span>Market conditions</span><span class="muted small">each trade tagged at its signal, using only past candles</span></div>
+        <p class="cond-head" id="cond-head"></p>
+        <ul class="why-list" id="cond-lines"></ul>
+        <div class="cond-grid" id="cond-grid"></div>
+        <p class="muted small" id="cond-now"></p>
+        <details class="note cond-def"><summary>How conditions are defined</summary><ul id="cond-def"></ul></details>
+      </div>
+
+      <div class="panel" id="tfs-panel" hidden>
+        <div class="panel-h"><span>Across timeframes</span><span class="muted small">same setup, window, costs and filters</span></div>
+        <div class="tbl-wrap"><table class="tfs" id="tfs"><thead><tr><th>Timeframe</th><th>Fills on</th><th class="r">Setups</th><th class="r">Closed</th><th class="r">Win rate</th><th class="r">Expectancy</th><th class="r">PF</th><th class="r">Net R</th><th class="r">Max DD</th><th>Note</th></tr></thead><tbody></tbody></table></div>
+        <p class="muted small" id="tfs-note"></p>
       </div>
 
       <div class="panel chart-panel">
@@ -402,6 +448,29 @@
 
       <div class="meta" id="meta"></div>
     </div>
+
+    <div id="strat-res" hidden>
+      <div class="verdict-card">
+        <div class="res-head"><div class="res-main"><div class="eyebrow">Strategy comparison</div><div class="res-title" id="sc-title"></div></div></div>
+        <div class="r-sub" id="sc-sub"></div>
+        <div class="provenance" id="sc-prov"></div>
+      </div>
+      <div class="dq" id="sc-lead"></div>
+      <div class="panel">
+        <div class="panel-h"><span>Side by side</span><span class="muted small">after fees and slippage · tap a column to sort</span></div>
+        <div class="tbl-wrap"><table class="sc-tbl" id="sc-tbl"><thead><tr id="sc-head"></tr></thead><tbody></tbody></table></div>
+      </div>
+      <div class="panel chart-panel">
+        <div class="panel-h"><span>Equity overlay</span><span class="muted small">cumulative R after costs, by exit time</span></div>
+        <canvas id="sc-chart" height="280"></canvas>
+        <div class="legend" id="sc-legend"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-h"><span>Read this before ranking</span></div>
+        <ul class="why-list" id="sc-notes"></ul>
+        <details class="note"><summary>Exactly what each strategy did</summary><ul id="sc-how"></ul></details>
+      </div>
+    </div>
   </section>
 </main>
 
@@ -428,6 +497,28 @@
   </div>
 </section>
 
+<div class="rp-modal" id="rp" hidden role="dialog" aria-modal="true" aria-labelledby="rp-title">
+  <div class="rp-box">
+    <div class="rp-head">
+      <div><div class="eyebrow">Trade replay</div><div class="rp-title" id="rp-title"></div></div>
+      <button type="button" class="btn-ghost sm" id="rp-close" aria-label="Close replay">Close</button>
+    </div>
+    <div class="rp-status" id="rp-status" aria-live="polite"></div>
+    <div class="rp-chart"><canvas id="rp-cv" height="320"></canvas><div class="rp-load" id="rp-load" hidden><span class="spin"></span><span>Loading the stored candles...</span></div></div>
+    <div class="rp-ctrl" role="group" aria-label="Replay controls">
+      <button type="button" class="btn-ghost sm" id="rp-start">Signal</button>
+      <button type="button" class="btn-ghost sm" id="rp-back" aria-label="Step back one candle">Back</button>
+      <button type="button" class="btn-ghost sm rp-play" id="rp-play">Play</button>
+      <button type="button" class="btn-ghost sm" id="rp-fwd" aria-label="Step forward one candle">Step</button>
+      <button type="button" class="btn-ghost sm" id="rp-end">Exit</button>
+      <label class="rp-speed">Speed <span class="sel"><select id="rp-speed"><option value="1">1x</option><option value="2">2x</option><option value="4" selected>4x</option><option value="8">8x</option><option value="16">16x</option></select></span></label>
+    </div>
+    <input type="range" class="rp-scrub" id="rp-scrub" min="0" max="0" value="0" aria-label="Replay position">
+    <div class="rp-info" id="rp-info"></div>
+    <p class="muted small" id="rp-src"></p>
+  </div>
+</div>
+
 <footer class="foot">
   <div class="foot-in">
     <div class="foot-brand"><svg class="inf foot-mark" viewBox="0 0 120 60" aria-hidden="true" focusable="false"><path class="inf-halo" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-halo2" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-tube" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-core" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-trace" pathLength="100" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-trace inf-trace2" pathLength="100" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/></svg><span>CHRONOS</span></div>
@@ -438,5 +529,6 @@
 <div class="toasts" id="toasts" aria-live="assertive"></div>
 <script src="/static/account.js"></script>
 <script src="/static/app.js"></script>
+<script src="/static/p2.js"></script>
 </body>
 </html>

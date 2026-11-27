@@ -21,7 +21,9 @@ WS_URL = "wss://api-stream.myfundedperpetuals.com/v1/market-data"
 MARKETS_URL = "https://developers.myfundedperpetuals.com/v1/markets"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_DIR = os.path.join(HERE, "candle_cache")
-STEP = {"5m": 300_000, "15m": 900_000, "30m": 1_800_000, "1h": 3_600_000, "4h": 14_400_000}
+STEP = {"5m": 300_000, "15m": 900_000, "30m": 1_800_000, "1h": 3_600_000, "4h": 14_400_000, "1d": 86_400_000}
+SETUP_TFS = ("5m", "15m", "30m", "1h", "4h", "1d")  # setup / fingerprint / zone timeframes (1d is resampled, never fetched)
+HTF_CHOICES = ("1h", "4h", "1d")
 H4 = STEP["4h"]
 CHUNK = 900  # MFP history skips bars past ~1000-1500 per request, so 900-bar chunks
 
@@ -191,6 +193,56 @@ def transfer_geometry(g_user, ref, atr_now, market_id=None):
     return g
 
 
+# ---------------------------------------------------------------- higher-timeframe confirmation
+HTF_EMA = 20       # EMA length on the higher timeframe
+HTF_SLOPE_BARS = 3  # EMA change measured over this many closed HTF candles
+HTF_RULE = (f"higher-timeframe trend must agree: on the last {{htf}} candle closed at the signal time, the close is "
+            f"above its EMA({HTF_EMA}) and the EMA is higher than {HTF_SLOPE_BARS} candles earlier (long); below and "
+            f"lower (short). Not enough closed {{htf}} candles = no confirmation, setup skipped")
+
+
+class HTFGate:
+    """Higher-timeframe trend confirmation. ok(t) reads only HTF candles whose close time is <= t."""
+
+    def __init__(self, base, htf, sgn):
+        if htf not in HTF_CHOICES:
+            raise SystemExit(f"--htf-confirm must be one of {', '.join(HTF_CHOICES)}")
+        bstep = min(b2[0] - b1[0] for b1, b2 in zip(base[:50], base[1:51]))
+        step = STEP[htf]
+        self.htf, self.sgn, self.step = htf, sgn, step
+        self.bars = complete_bars(resample(base, step), step, bstep)
+        self.ema = ema_series([b[4] for b in self.bars], HTF_EMA)
+        self.close_t = [b[0] + step for b in self.bars]
+        self.checked = self.rejected = self.unknown = 0
+
+    def state(self, t):
+        """'up' | 'down' | 'mixed' | None (not enough closed HTF candles), as known at time t."""
+        h = bisect.bisect_right(self.close_t, t) - 1
+        if h < HTF_SLOPE_BARS or self.ema[h] is None or self.ema[h - HTF_SLOPE_BARS] is None:
+            return None
+        slope = self.ema[h] - self.ema[h - HTF_SLOPE_BARS]
+        c = self.bars[h][4]
+        if slope > 0 and c > self.ema[h]:
+            return "up"
+        if slope < 0 and c < self.ema[h]:
+            return "down"
+        return "mixed"
+
+    def ok(self, t):
+        st = self.state(t)
+        self.checked += 1
+        good = st == ("up" if self.sgn > 0 else "down")
+        if not good:
+            self.rejected += 1
+            if st is None:
+                self.unknown += 1
+        return good
+
+    def info(self):
+        return dict(htf=self.htf, rule=HTF_RULE.format(htf=self.htf), checked=self.checked, rejected=self.rejected,
+                    not_enough_history=self.unknown)
+
+
 # ---------------------------------------------------------------- replay
 def slip_amount(price, slip_bps=0.0, slip_abs=0.0):
     """Price distance one market-type fill loses to slippage: a fixed amount (ticks x tick size) or bps of price."""
@@ -211,7 +263,7 @@ def simulate_order(base, j, t, entry, sl, tp, sgn, entry_type, expiry_ms, atr_t,
     and fill at their price. r_gross is the theoretical result (no fees, no slippage); r_net is after both."""
     risk = abs(entry - sl) if risk is None else risk
     sweep_window_ms = sweep_window_ms or expiry_ms
-    tr = dict(tr or {}, placed=t, entry=entry, sl=sl, tp=tp, status="unfilled")
+    tr = dict(tr or {}, placed=t, entry=entry, sl=sl, tp=tp, status="unfilled", entry_type=entry_type)
     # ---- fill
     fill_j = fill_px = None
     k = j
@@ -307,16 +359,19 @@ def simulate_order(base, j, t, entry, sl, tp, sgn, entry_type, expiry_ms, atr_t,
 
 def replay(base, h4, g, mode="atr", expiry_ms=72 * 3600_000, step_ms=H4, trend_filter=False,
            sweep_window_ms=None, sweep_atr=1.0, fee_pct=0.0, swap_pct_day=0.0, start_ms=None, max_hold_ms=None,
-           slip_bps=0.0, slip_abs=0.0, allow_overlap=False):
+           slip_bps=0.0, slip_abs=0.0, allow_overlap=False, tf_ms=H4, gate=None):
     """Every-close mode. Walk forward through history. At each eligible 4h close (t) with no open order/trade,
     place the setup using only info known at t (last closed 4h close as reference, ATR/EMA from closed 4h bars),
     then simulate it on base bars with openTime >= t. Conservative fills: SL wins any same-bar tie."""
     sgn = g["sgn"]
     bstep = min(b2[0] - b1[0] for b1, b2 in zip(base[:50], base[1:51]))
     h4c = [b for b in h4 if b[5] >= b[0] + H4 - bstep]  # complete 4h bars only
-    atr = atr_series(h4c)
     ema = ema_series([b[4] for b in h4c])
-    close_t = [b[0] + H4 for b in h4c]  # time the 4h bar is closed/known
+    h4_close = [b[0] + H4 for b in h4c]
+    # setup-timeframe candles (4h by default): decisions at each of their closes, ATR from them
+    tfc = h4c if tf_ms == H4 else [b for b in resample(base, tf_ms) if b[5] >= b[0] + tf_ms - bstep]
+    atr = atr_series(tfc)
+    close_t = [b[0] + tf_ms for b in tfc]  # time the setup-tf bar is closed/known
     bt = [b[0] for b in base]
     trades, busy_until, skipped_trend = [], 0, 0
     for i, t in enumerate(close_t):
@@ -324,12 +379,19 @@ def replay(base, h4, g, mode="atr", expiry_ms=72 * 3600_000, step_ms=H4, trend_f
             continue
         if t < busy_until or (t % step_ms):
             continue
-        if atr[i] is None or (trend_filter and (i < 5 or ema[i - 5] is None)):
+        if atr[i] is None:
             continue
-        if trend_filter and (ema[i] - ema[i - 5]) * sgn <= 0:
+        if trend_filter:  # 4h EMA50 slope over 5 closed 4h bars, known at t
+            h = bisect.bisect_right(h4_close, t) - 1
+            if h < 5 or ema[h] is None or ema[h - 5] is None:
+                continue
+            if (ema[h] - ema[h - 5]) * sgn <= 0:
+                skipped_trend += 1
+                continue
+        if gate is not None and not gate.ok(t):
             skipped_trend += 1
             continue
-        ref = h4c[i][4]
+        ref = tfc[i][4]
         if mode == "atr":
             a = atr[i]
             entry = ref + g["entry_atr"] * a
@@ -475,7 +537,7 @@ def derive_sl_buffer(zones_all, side, entry, sl, atr_now):
 def replay_pattern(base, g, zone_tf="4h", expiry_ms=30 * 86400_000, max_touches=1, sl_buffer_atr=0.3,
                    trend_filter=False, sweep_window_ms=None, sweep_atr=1.0, fee_pct=0.0, swap_pct_day=0.0,
                    start_ms=None, max_hold_ms=None, zone_max_age_ms=30 * 86400_000, zone_params=None,
-                   slip_bps=0.0, slip_abs=0.0):
+                   slip_bps=0.0, slip_abs=0.0, gate=None):
     """Pattern mode. At each zone-tf close t when flat, look only at zones confirmed at or before t that are
     still alive at t and have been touched fewer than max_touches times before t. Pick the one nearest to the
     current price (price must still be on the far side of its proximal edge) and rest a limit at its proximal edge:
@@ -527,6 +589,9 @@ def replay_pattern(base, g, zone_tf="4h", expiry_ms=30 * 86400_000, max_touches=
             ok_trend = h >= 5 and ema[h] is not None and ema[h - 5] is not None and (ema[h] - ema[h - 5]) * sgn > 0
             if not ok_trend:
                 skipped_trend += 1
+        if cands and ok_trend and gate is not None and not gate.ok(t):
+            ok_trend = False
+            skipped_trend += 1
         n = min(cands)[1] if cands and ok_trend else None
         if armed and armed[0] != n:
             disarm(t)
@@ -577,7 +642,7 @@ def replay_pattern_triggered(base, g, entry_style, zone_tf="4h", confirm_tf="15m
                              trigger_window_ms=None, sweep_min_atr=0.1, sweep_max_atr=1.5, skip_strong_atr=None,
                              swing_n=2, trend_filter=False, sweep_window_ms=None, sweep_atr=1.0, fee_pct=0.0,
                              swap_pct_day=0.0, start_ms=None, max_hold_ms=None, zone_max_age_ms=30 * 86400_000,
-                             zone_params=None, slip_bps=0.0, slip_abs=0.0):
+                             zone_params=None, slip_bps=0.0, slip_abs=0.0, gate=None):
     """Pattern mode with a trigger instead of a blind limit. Same zones, same 15m fill/exit engine, same fees.
 
     Watch starts when price first taps a fresh zone's near edge (the tap is a base-bar time, known when it happens).
@@ -639,6 +704,9 @@ def replay_pattern_triggered(base, g, entry_style, zone_tf="4h", confirm_tf="15m
             if not (k4 >= 5 and ema[k4] is not None and ema[k4 - 5] is not None and (ema[k4] - ema[k4 - 5]) * sgn > 0):
                 skipped_trend += 1
                 continue
+        if gate is not None and not gate.ok(tt):
+            skipped_trend += 1
+            continue
         # strong candle against the order between zone confirmation and the tap (closed zone-tf bars only)
         if skip_strong_atr:
             k0, k1 = bisect.bisect_right(zb_close_t, z["known"]), bisect.bisect_right(zb_close_t, tt)
@@ -1190,7 +1258,7 @@ def _unexpected_gaps(base, step, session):
     return out
 
 
-def annotate_trades(trades, base, prov, step, interval, m):
+def annotate_trades(trades, base, prov, step, interval, m, load_range=None):
     """Traceability fields on every trade (added after the simulation, never used by it):
     interval, candle source of the fill bar, data holes while the order/trade was live, and a candle window
     (signal - 48 bars .. exit + 24 bars) so the trade can be re-drawn from the same cached candles."""
@@ -1198,6 +1266,7 @@ def annotate_trades(trades, base, prov, step, interval, m):
     session = m.get("provider") in ("veranta", "ostium") or any(
         x["source"].startswith(("yahoo", "dukascopy")) for x in segs)
     gaps = _unexpected_gaps(base, step, session)
+    by_t = {b[0]: b for b in base}
     for t in trades:
         t["interval"] = interval
         t["signal"] = t.get("placed")
@@ -1214,6 +1283,16 @@ def annotate_trades(trades, base, prov, step, interval, m):
             if missing:
                 t["gap_bars_in_trade"] = int(missing)
             t["candle_window"] = dict(interval=interval, from_ms=lo - 48 * step, to_ms=(hi or lo) + 24 * step)
+            if load_range:  # the exact range the engine loaded; replay reloads it so merged candles are identical
+                t["candle_window"].update(load_from_ms=load_range[0], load_to_ms=load_range[1])
+        # the candles the result hinges on, so a replay can prove it is drawing the same data
+        chk = {}
+        for k, key in (("filled", "fill"), ("exit_bar", "exit")):
+            b = by_t.get(t.get(k))
+            if b:
+                chk[key] = [b[0], b[1], b[2], b[3], b[4]]
+        if chk:
+            t["bar_check"] = chk
 
 
 def data_quality(data, s, stats):
@@ -1250,14 +1329,25 @@ def data_quality(data, s, stats):
     return dict(status=status, messages=msgs, missing_bars=miss, holes=g.get("gaps", 0), bars=bars)
 
 
+def setup_tf_of(a, mode):
+    """The setup timeframe: fingerprint tf (similar), zone tf (pattern), decision tf (every-close, rule)."""
+    if mode == "similar":
+        return getattr(a, "similar_tf", "1h") or "1h"
+    if mode == "pattern":
+        return a.zone_tf
+    return getattr(a, "setup_tf", None) or ("4h" if mode == "every-close" else "1h")
+
+
 def run_market(m, a, g_user, mode, end_ms, start_ms, warm, expiry, sl_buffer, sl_src, zone_params, query=None):
     """Run one market. g_user is the user's setup; other markets get the same shape in ATR units."""
-    base = fetch_candles(m, a.interval, start_ms - warm, end_ms, refresh=a.refresh)
+    load_from = start_ms - warm
+    base = fetch_candles(m, a.interval, load_from, end_ms, refresh=a.refresh)
     if len(base) < 200:
         raise SystemExit(f"Not enough price history for {m['market_id']}: only {len(base)} candles were found, "
                          "and at least 200 are needed. No result was produced.")
     start_ms, data = data_block(m, a, base, start_ms, end_ms, warm)
     step = STEP[a.interval]
+    tf = setup_tf_of(a, mode)
     h4 = resample(base, H4)
     h4c = [b for b in h4 if b[5] >= b[0] + H4 - step]
     atr_now = atr_series(h4c)[-1]
@@ -1269,6 +1359,13 @@ def run_market(m, a, g_user, mode, end_ms, start_ms, warm, expiry, sl_buffer, sl
         g = transfer_geometry(g_user, ref, atr_now, m["market_id"])
         if a.ref is not None:
             g["ref"] = ref
+    if mode == "every-close" and tf != "4h" and a.geometry == "atr":
+        # same price levels today, expressed in the setup timeframe's ATR so each past close is scaled by its own tf ATR
+        tfs = STEP[tf]
+        atr_tf = atr_series(complete_bars(resample(base, tfs), tfs, step))[-1]
+        keep = {k: g[k] for k in ("market_id", "zone_tf_atr_now") if k in g}
+        g = dict(build_geometry(g["side"], g["entry"], g["tp"], g["sl"], g["ref"], atr_tf), **keep)
+        g["atr_tf"] = tf
     cls = asset_class(m)
     fee, swap = (0.0, 0.0) if a.no_fees else FEES[cls]
     slip = slippage_for(a, m)
@@ -1277,6 +1374,8 @@ def run_market(m, a, g_user, mode, end_ms, start_ms, warm, expiry, sl_buffer, sl
                   max_hold_ms=None if str(a.max_hold).lower() == "none" else parse_dur(a.max_hold),
                   slip_bps=slip["bps"], slip_abs=slip["abs"])
     allow_overlap = bool(getattr(a, "allow_overlap", False))
+    htf = getattr(a, "htf_confirm", None)
+    gate = HTFGate(base, htf, g["sgn"]) if htf and htf != "off" else None
     zstats = zlist = matches = q_used = None
     if mode == "similar":
         import similar as S
@@ -1289,20 +1388,22 @@ def run_market(m, a, g_user, mode, end_ms, start_ms, warm, expiry, sl_buffer, sl
             fee_pct=fee, swap_pct_day=swap,
             sweep_window_ms=common["sweep_window_ms"], sweep_atr=common["sweep_atr"],
             max_hold_ms=common["max_hold_ms"], slip_bps=slip["bps"], slip_abs=slip["abs"],
-            allow_overlap=allow_overlap)
+            allow_overlap=allow_overlap, gate=gate)
         setups, basis = len(matches), f"similar past windows found (up to {k})"
     elif mode == "pattern":
         style = getattr(a, "entry_style", "limit") or "limit"
         if style == "limit":
             trades, skipped, zones, zstats = replay_pattern(
                 base, g, zone_tf=a.zone_tf, expiry_ms=expiry, max_touches=a.max_touches, sl_buffer_atr=sl_buffer,
-                trend_filter=a.trend_filter, zone_max_age_ms=parse_dur(a.zone_max_age), zone_params=zone_params, **common)
+                trend_filter=a.trend_filter, zone_max_age_ms=parse_dur(a.zone_max_age), zone_params=zone_params,
+                gate=gate, **common)
         else:
             trades, skipped, zones, zstats = replay_pattern_triggered(
                 base, g, style, zone_tf=a.zone_tf, confirm_tf=a.confirm_tf, sl_buffer_atr=sl_buffer,
                 max_touches=a.max_touches, trigger_window_ms=parse_dur(a.trigger_window) if a.trigger_window else None,
                 sweep_min_atr=a.sweep_min_atr, sweep_max_atr=a.sweep_max_atr, skip_strong_atr=a.skip_strong_atr,
-                trend_filter=a.trend_filter, zone_max_age_ms=parse_dur(a.zone_max_age), zone_params=zone_params, **common)
+                trend_filter=a.trend_filter, zone_max_age_ms=parse_dur(a.zone_max_age), zone_params=zone_params,
+                gate=gate, **common)
         zlist = [dict(known=z["known"], base_from=z["base_from"], proximal=z["proximal"], distal=z["distal"],
                       height_atr=z["height_atr"], impulse_atr=z["impulse_atr"],
                       first_touch=z["touches"][0] if z["touches"] else None,
@@ -1311,14 +1412,23 @@ def run_market(m, a, g_user, mode, end_ms, start_ms, warm, expiry, sl_buffer, sl
             setups, basis = zstats["zones_found"], f"fresh {a.zone_tf} {'supply' if g['side'] == 'short' else 'demand'} zones found"
         else:
             setups, basis = len(trades) + skipped, f"fresh-zone taps watched for a {style} trigger"
+    elif mode == "rule":
+        import strategies as R
+        trades, setups, skipped = R.replay_rule(
+            base, a.rule, json.loads(a.rule_params or "{}"), g, tf=tf, allow_overlap=allow_overlap, gate=gate,
+            expiry_ms=expiry, **common)
+        basis = f"{R.RULES[a.rule]['label'].lower()} signals on {tf} candles"
     else:
+        tfs = STEP[tf]
         trades, skipped = replay(base, h4, g, mode=a.geometry, expiry_ms=expiry, trend_filter=a.trend_filter,
-                                 allow_overlap=allow_overlap, **common)
-        setups, basis = len(trades) + skipped, "4h closes where an order could be placed" + (
-            " (incl. ones the trend filter skipped)" if a.trend_filter else "")
+                                 allow_overlap=allow_overlap, tf_ms=tfs, step_ms=tfs, gate=gate, **common)
+        setups, basis = len(trades) + skipped, f"{tf} closes where an order could be placed" + (
+            " (incl. ones the filters skipped)" if (a.trend_filter or gate) else "")
     for t in trades:
         t["market"] = m["market_id"]
-    annotate_trades(trades, base, data.get("provenance") or {}, step, a.interval, m)
+    annotate_trades(trades, base, data.get("provenance") or {}, step, a.interval, m, load_range=(load_from, end_ms))
+    import conditions as C
+    cond = C.analyse(trades, base, end_ms=end_ms)
     s = summarize(trades, g)
     import metrics as MX
     stats = MX.compute(trades, setups_identified=setups, setups_basis=basis)
@@ -1328,11 +1438,13 @@ def run_market(m, a, g_user, mode, end_ms, start_ms, warm, expiry, sl_buffer, sl
         trend_now = "up" if ema[-1] > ema[-6] else "down"
     out = dict(market=dict(market_id=m["market_id"], coin=m["coin"], provider=m["provider"]),
                setup={k: (round(v, 6) if isinstance(v, float) else v) for k, v in g.items()},
-               data=dict(data, first_order_ms=trades[0]["placed"] if trades else None),
+               data=dict(data, first_order_ms=trades[0]["placed"] if trades else None, setup_tf=tf),
                fees=dict(asset_class=cls, commission_pct_per_fill=fee, swap_pct_per_day=swap),
                costs=dict(asset_class=cls, commission_pct_per_fill=fee, swap_pct_per_day=swap, slippage=slip,
                           allow_overlap=allow_overlap),
-               skipped_by_trend=skipped, trend_now=trend_now, result=s, stats=stats)
+               skipped_by_trend=skipped, trend_now=trend_now, result=s, stats=stats, conditions=cond)
+    if gate is not None:
+        out["htf"] = dict(gate.info(), now=gate.state(end_ms))
     out["data_quality"] = data_quality(out["data"], s, stats)
     if zstats is not None:
         out["zones"] = dict(zstats, list=zlist)
@@ -1342,15 +1454,14 @@ def run_market(m, a, g_user, mode, end_ms, start_ms, warm, expiry, sl_buffer, sl
         out["query"] = S.public_query(q_used or query)
     return out, trades
 
-
-def main(argv=None):
+def build_parser():
     ap = argparse.ArgumentParser(description="Replay a setup over recent MFP candles (read-only).")
     ap.add_argument("market", help="market your levels belong to")
     ap.add_argument("side", choices=["long", "short"])
     ap.add_argument("--entry", required=True, help="price, or +-x%% from current price")
     ap.add_argument("--tp", required=True, help="price, +-x%% from entry, or NR")
     ap.add_argument("--sl", required=True, help="price or +-x%% from entry")
-    ap.add_argument("--mode", choices=["every-close", "pattern", "similar"], default="every-close",
+    ap.add_argument("--mode", choices=["every-close", "pattern", "similar", "rule"], default="every-close",
                     help="every-close (default): the setup shape at every 4h close when flat. "
                          "similar: fingerprint the last N candles at the setup moment and replay on the closest past windows. "
                          "pattern: only at fresh supply/demand zones found by rule on --zone-tf candles")
@@ -1364,7 +1475,7 @@ def main(argv=None):
     ap.add_argument("--sweep-window", default=None, help="window after fill for the stop check (default = expiry)")
     ap.add_argument("--sweep-atr", type=float, default=1.0, help="max ATR past the stop that still counts as a wick sweep")
     # pattern mode
-    ap.add_argument("--zone-tf", default="4h", choices=["30m", "1h", "4h"], help="pattern: timeframe zones are found on")
+    ap.add_argument("--zone-tf", default="4h", choices=list(SETUP_TFS), help="pattern: timeframe zones are found on")
     ap.add_argument("--sl-buffer-atr", type=float, default=None,
                     help="pattern: SL distance beyond the zone's far edge in zone-tf ATR (default: derived from your SL)")
     ap.add_argument("--max-touches", type=int, default=1, help="pattern: zone usable until touched this many times (1 = fresh only)")
@@ -1389,7 +1500,7 @@ def main(argv=None):
     ap.add_argument("--compare", default=None,
                     help="rerun the same setup (ATR-scaled) on up to 5 other markets and compare them, "
                          "e.g. GBPUSD,AUDUSD,USDJPY,USDCAD,USDCHF. Cannot be combined with --basket")
-    ap.add_argument("--similar-tf", default="1h", choices=["15m", "30m", "1h", "4h"],
+    ap.add_argument("--similar-tf", default="1h", choices=list(SETUP_TFS),
                     help="similar: timeframe of the fingerprint path (default 1h)")
     ap.add_argument("--similar-bars", type=int, default=24,
                     help="similar: number of candles in the fingerprint (default 24)")
@@ -1418,7 +1529,93 @@ def main(argv=None):
     ap.add_argument("--refresh", action="store_true", help="ignore candle cache")
     ap.add_argument("--json", action="store_true", help="print JSON instead of text")
     ap.add_argument("--json-out", help="also write JSON (with trade list) to this path")
-    a = ap.parse_args(argv)
+    ap.add_argument("--setup-tf", default=None, choices=list(SETUP_TFS),
+                    help="every-close / rule: timeframe whose closes are decision points and whose ATR scales the setup "
+                         "(default 4h every-close, 1h rule). 5m needs --interval 5m; 1d is built from the 15m candles")
+    ap.add_argument("--htf-confirm", default="off", choices=["off"] + list(HTF_CHOICES),
+                    help="only take a setup when the higher-timeframe trend agrees (EMA20 rising and close above it for "
+                         "a long), using HTF candles closed at the signal time")
+    import strategies as _R
+    ap.add_argument("--rule", default=None, choices=list(_R.RULES),
+                    help="rule mode: ema_cross, breakout, liquidity_sweep or fvg (see strategies.py)")
+    ap.add_argument("--rule-params", default=None, help='rule mode: JSON parameters, e.g. {"fast": 20, "slow": 50}')
+    ap.add_argument("--tf-sweep", default=None,
+                    help="also rerun the same test on these setup timeframes and compare, e.g. 5m,15m,30m,1h,4h,1d")
+    ap.add_argument("--end-ms", type=int, default=None,
+                    help="end of the test window (UTC ms, rounded down to the candle). Default: the last closed candle")
+    return ap
+
+
+def main(argv=None):
+    a = build_parser().parse_args(argv)
+    out, trades, txt = run_cli(a)
+    if a.json_out:
+        json.dump(dict(out, trades=trades), open(a.json_out, "w"), indent=1)
+    print(json.dumps(out, indent=1) if a.json else txt)
+    return out
+
+
+def tf_row(tf, interval, out=None, err=None, current=False):
+    if err:
+        return dict(tf=tf, interval=interval, error=str(err), current=current)
+    st, dq = out["stats"], out.get("data_quality") or {}
+    nt, gr = st["net"], st["gross"]
+    return dict(tf=tf, interval=interval, current=current, days=out["data"]["days"], setups=st["setups_identified"],
+                closed=st["closed"], unfilled=st["unfilled"], win_rate=nt["win_rate"], expectancy_r=nt["expectancy_r"],
+                profit_factor=nt["profit_factor"], profit_factor_infinite=nt["profit_factor_infinite"],
+                total_r=nt["total_r"], total_r_gross=gr["total_r"], max_drawdown_r=nt["max_drawdown_r"],
+                avg_hours=st["duration_h"]["avg"], verdict=out["result"]["verdict"], dq=dq.get("status"),
+                skipped_by_filters=out.get("skipped_by_trend"))
+
+
+def exec_interval_for(tf, default="15m"):
+    """Execution candles: 5m for 5m setups, otherwise the default (15m), never coarser than the setup tf."""
+    if tf == "5m":
+        return "5m"
+    return default if STEP[default] <= STEP[tf] else "5m"
+
+
+def run_tf_sweep(a, out):
+    import copy
+    tfs = [x.strip() for x in str(a.tf_sweep).split(",") if x.strip()]
+    bad = [x for x in tfs if x not in SETUP_TFS]
+    if bad:
+        raise SystemExit(f"--tf-sweep: unknown timeframe(s) {', '.join(bad)} (use {', '.join(SETUP_TFS)})")
+    cur = setup_tf_of(a, a.mode)
+    rows = []
+    for tf in dict.fromkeys(tfs):
+        iv = exec_interval_for(tf)
+        if tf == cur and iv == a.interval:
+            rows.append(tf_row(tf, iv, out, current=True))
+            continue
+        b = copy.copy(a)
+        b.tf_sweep = b.json_out = b.compare = b.basket = None
+        b.insights = b.scan = b.force_scan = False
+        b.interval = iv
+        b.end_ms = out["params"]["end_ms"]
+        if a.mode == "similar":
+            b.similar_tf = tf
+        elif a.mode == "pattern":
+            b.zone_tf = tf
+            if STEP[b.confirm_tf] < STEP[iv]:
+                b.confirm_tf = iv
+        else:
+            b.setup_tf = tf
+        htf = getattr(a, "htf_confirm", "off")
+        if htf and htf != "off" and STEP[htf] <= STEP[tf]:
+            rows.append(tf_row(tf, iv, err=f"higher-timeframe confirmation on {htf} needs a setup timeframe below {htf}"))
+            continue
+        try:
+            o2, _t, _x = run_cli(b)
+            rows.append(tf_row(tf, iv, o2))
+        except SystemExit as ex:
+            rows.append(tf_row(tf, iv, err=ex))
+    return dict(rows=rows, note="Same market, window end, levels, fees, slippage, expiry, time stop and filters on every "
+                                "row; only the setup timeframe changes. 5m setups run on 5m candles, the rest on 15m. "
+                                "Daily setups give few candles in a 90-day window, so expect few trades there.")
+
+
+def run_cli(a):
     if not (8 <= a.similar_bars <= 96):
         raise SystemExit("--similar-bars must be between 8 and 96")
     if not (5 <= a.similar_k <= 80):
@@ -1431,14 +1628,31 @@ def main(argv=None):
     mode = a.mode
     if a.allow_overlap and mode == "pattern":
         raise SystemExit("--allow-overlap works with every-close and similar modes; pattern mode trades one zone at a time")
+    if mode == "rule":
+        if not a.rule:
+            raise SystemExit("--mode rule needs --rule (ema_cross, breakout, liquidity_sweep or fvg)")
+        import strategies as _R
+        try:
+            _R.clean_params(a.rule, json.loads(a.rule_params or "{}"))
+        except (ValueError, json.JSONDecodeError) as ex:
+            raise SystemExit(f"--rule-params: {ex}") from None
+    tf = setup_tf_of(a, mode)
+    if STEP[tf] < STEP[a.interval]:
+        raise SystemExit(f"a {tf} setup timeframe needs {tf} execution candles: use --interval {tf}")
+    htf = getattr(a, "htf_confirm", "off") or "off"
+    if htf != "off" and STEP[htf] <= STEP[tf]:
+        raise SystemExit(f"higher-timeframe confirmation ({htf}) must be above the setup timeframe ({tf})")
     expiry_s = a.expiry or ("30d" if mode == "pattern" else "72h")
     expiry = parse_dur(expiry_s)
     markets = load_markets()
     m = resolve_market(a.market, markets)
     step = STEP[a.interval]
     now = int(time.time() * 1000)
-    end_ms = now - now % step
+    end_ms = min(a.end_ms or now, now)
+    end_ms -= end_ms % step
     warm = 14 * 86400_000  # 4h EMA50 + ATR warm-up (84 4h bars)
+    if "1d" in (tf, htf):
+        warm = 30 * 86400_000  # daily ATR(14) / EMA(20) need about a month of closed daily candles
     start_ms = end_ms - a.days * 86400_000
     global USE_BACKUPS
     USE_BACKUPS = not a.no_backups
@@ -1512,10 +1726,26 @@ def main(argv=None):
             out["scan"] = scan
             if not a.json:
                 txt += "\n\n" + S.scan_report(scan, forced=forced, reason=reason)
-    if a.json_out:
-        json.dump(dict(out, trades=trades), open(a.json_out, "w"), indent=1)
-    print(json.dumps(out, indent=1) if a.json else txt)
-    return out
+    if getattr(a, "tf_sweep", None):
+        out["tf_sweep"] = run_tf_sweep(a, out)
+        if not a.json:
+            txt += "\n\n" + tf_sweep_report(out["tf_sweep"])
+    return out, trades, txt
+
+
+def tf_sweep_report(sw):
+    L = ["Same setup across timeframes:"]
+    for r in sw["rows"]:
+        if r.get("error"):
+            L.append(f"  {r['tf']:>4}: not run ({r['error']})")
+            continue
+        pf = "n/a" if r["profit_factor"] is None else f"{r['profit_factor']:.2f}"
+        wr = "n/a" if r["win_rate"] is None else f"{r['win_rate'] * 100:.0f}%"
+        L.append(f"  {r['tf']:>4} ({r['interval']} fills): {r['closed']:>3} closed, win {wr:>4}, "
+                 f"expectancy {r['expectancy_r']:+.3f}R, PF {pf}, net {r['total_r']:+.2f}R, max DD {r['max_drawdown_r']:.2f}R"
+                 + ("  <- your run" if r.get("current") else ""))
+    L.append(sw["note"])
+    return "\n".join(L)
 
 
 def pattern_sl_buffer(a, ctx):
@@ -1586,8 +1816,19 @@ def run_setup(a, mode, ctx, sl_buffer, sl_src, basket):
         params.update(placement="at the closest non-overlapping past windows (ATR-scaled geometry, one order at a time)",
                       similar_tf=a.similar_tf, similar_bars=int(a.similar_bars), similar_k=int(a.similar_k),
                       similar_at=getattr(a, "similar_at", None))
+    elif mode == "rule":
+        import strategies as R
+        rp = R.clean_params(a.rule, json.loads(a.rule_params or "{}"))
+        params.update(placement=R.describe(a.rule, rp, setup_tf_of(a, mode), g["rr"]), rule=a.rule, rule_params=rp,
+                      rule_label=R.RULES[a.rule]["label"])
     else:
-        params.update(placement="every 4h close when flat (one order/trade at a time)")
+        tf = setup_tf_of(a, mode)
+        params.update(placement=f"every {tf} close when flat (" + (
+            "overlapping trades allowed" if a.allow_overlap else "one order/trade at a time") + ")")
+    tf = setup_tf_of(a, mode)
+    htf = getattr(a, "htf_confirm", "off") or "off"
+    params.update(setup_tf=tf, interval=a.interval, end_ms=ctx["end_ms"], htf_confirm=htf,
+                  htf_rule=HTF_RULE.format(htf=htf) if htf != "off" else None)
     head = dict(tool="mfp-setup-tester", generated=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), params=params)
     if len(runs) == 1:
         out, trades = runs[0]

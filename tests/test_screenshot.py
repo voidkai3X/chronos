@@ -85,10 +85,9 @@ class TestImageAndParse(unittest.TestCase):
         self.assertEqual(shot.normalize_timeframe("H1"), ("1h", "1h"))
         self.assertEqual(shot.normalize_timeframe("4h"), ("4h", "4h"))
         self.assertEqual(shot.normalize_timeframe("M15"), ("15m", "15m"))
-        disp, sim = shot.normalize_timeframe("D1")
-        self.assertEqual(disp, "1d")  # recognised and shown in a standard form, but not a fingerprint timeframe
-        self.assertIsNone(sim)
-        self.assertEqual(shot.normalize_timeframe("M5"), ("5m", None))
+        self.assertEqual(shot.normalize_timeframe("D1"), ("1d", "1d"))  # daily setups are supported since Phase 2
+        self.assertEqual(shot.normalize_timeframe("M5"), ("5m", "5m"))
+        self.assertEqual(shot.normalize_timeframe("W1")[1], None)  # weekly is not a setup timeframe
         self.assertEqual(shot.normalize_timeframe("weird tf"), ("weird tf", None))
 
     def test_match_market_fuzzy(self):
@@ -533,8 +532,7 @@ class TestConfirmationPanel(unittest.TestCase):
         self.assertEqual(self.build(confidence={"pattern": 0.5})["pattern_read"], "Fair value gap")
 
     def test_unsupported_timeframe_is_reported_not_forced(self):
-        out = self.build(timeframe="D1")
-        self.assertEqual(out["timeframe"], "1d")
+        out = self.build(timeframe="W1")
         self.assertIsNone(out["similar_tf"])
         self.assertIn("left at its default", out["review"])
 

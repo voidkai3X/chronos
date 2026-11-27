@@ -74,6 +74,11 @@ Level formats:
 | `--days` | 90 | Test window. 14 more days are loaded before it as indicator warm-up. If a market has less history, the test runs on what exists and reports the real number of days |
 | `--no-backups` | off | MFP feed only: no backfill from OKX, Bybit, Yahoo or Dukascopy |
 | `--interval` | 15m | Candles used to simulate fills (5m, 15m, 30m, 1h) |
+| `--setup-tf` | 4h | every-close and rule modes: the timeframe whose closes decide setups (5m, 15m, 30m, 1h, 4h, 1d). Must not be finer than `--interval` |
+| `--htf-confirm` | off | Higher-timeframe confirmation (1h, 4h, 1d, above the setup timeframe): only take a setup when the last closed HTF candle closed above a rising EMA20 (EMA higher than 3 candles earlier) for a long, below a falling one for a short. Not enough HTF history = no confirmation |
+| `--tf-sweep` | off | Rerun the same setup for each setup timeframe (`all` or a list like `15m,1h,4h`) and add a comparison table. 5m setups fill on 5m candles, the rest on 15m |
+| `--mode rule` | - | Mechanical rule instead of your levels' location: `--rule ema_cross`, `breakout`, `liquidity_sweep` or `fvg`, with `--rule-params '{"fast":20}'`. The target is your levels' R:R |
+| `--end-ms` | now | Fix the window end (epoch ms), so several runs use exactly the same window |
 | `--expiry` | 72h | Unfilled order is cancelled after this |
 | `--max-hold` | 7d | Time stop after fill, exits at market. `none` = hold until TP or SL |
 | `--geometry` | atr | Scale the setup by 4h ATR (`atr`) or keep fixed percentages (`pct`) |
@@ -293,6 +298,13 @@ The web app shows this as an **Insights** panel under the result cards: findings
 
 Output includes orders, fills, unfilled orders, TP, SL and time exits; win rate and break-even win rate before and after fees; average R (net and gross), expectancy, and total R; max losing streak and max drawdown in R; a first-half vs second-half average R stability check; and the stop check. `--json` prints this as JSON. `--json-out` also saves every simulated trade.
 
+### Phase 2 tools (web)
+
+- **Trade replay.** Every trade has a Replay button. `GET /api/candles?market&interval&from&to&load_from&load_to` reloads the same range the test loaded and returns only stored candles; the page checks the fill and exit candles against the ones saved with the trade (`bar_check`) and says whether they match.
+- **Timeframes.** One "Setup timeframe" control (5m to daily) for every mode, optional higher-timeframe confirmation, and "Run across timeframes" (`tf`, `htf_confirm`, `tf_sweep` in the `/api/test` body).
+- **Market conditions.** Each trade is tagged at its signal from closed 4h candles: trending or ranging (efficiency ratio over 20 candles, 0.30 or more = trending), high or low volatility (ATR14 percentile against the previous 90 candles), bullish, bearish or mixed (close vs EMA50 and its 5-candle slope). Groups under 15 trades are flagged as small, under 5 are not judged.
+- **Strategy comparison.** `POST /api/strategies` runs 2 to 6 strategies on the same market, window, fees, slippage, timeframe and filters (`python strategy_compare.py spec.json` from the CLI). `GET /api/strategy-types` lists what can be tested and which named patterns are approximations.
+
 ## Checks
 
 `python tests/test_pattern.py` runs offline pattern-mode checks on synthetic candles:
@@ -305,6 +317,8 @@ Output includes orders, fills, unfilled orders, TP, SL and time exits; win rate 
 `python tests/test_similar.py` runs offline checks for similar mode: the path is scale-free (a 2x-scaled copy stays close); fingerprints are causal (later bars cannot change an earlier window); overlapping matches are dropped; the query window itself is not traded; results sort by distance; live levels keep the same ATR shape and R:R; and the live-scan gate only opens for a possible or proven edge.
 
 `python tests/test_rate_limit.py` runs offline checks for the web rate limiter: 6 heavy requests per IP per minute then 429; compare/scan share that budget; a second concurrent heavy run from the same IP is rejected; the slot is released afterwards; `CF-Connecting-IP` is trusted only from localhost; and `/` and `/api/health` are not limited.
+
+`python tests/test_phase2.py` runs offline Phase 2 checks: resampling 5m/15m into 15m-to-daily bars (OHLC, UTC alignment, unfinished bars dropped); higher-timeframe confirmation and market-condition tags give the same answer when every later candle is deleted or replaced; rule signals never read later candles; `/api/candles` returns exactly the stored candles the trade's fill and exit used; and request validation for timeframes, HTF confirmation, sweeps and strategy comparisons. `node tests/p2_shots.cjs` drives the Phase 2 UI against the mock server and saves `web/screenshots/p2-*.png`.
 
 `python tests/test_screenshot.py` runs offline checks for screenshot reading (OpenAI is mocked): image type and size; fuzzy mapping of symbols such as `USD/JPY` and `BTC` onto MFP markets; missing prices stay blank; the review payload flags low-confidence and missing fields; the endpoint is disabled without `OPENAI_API_KEY`; friendly errors for a bad image or an unreadable chart; the screenshot route shares the heavy per-IP budget; and the daily cap is enforced.
 
@@ -372,7 +386,6 @@ The full plan is in `docs/ROADMAP.md`, and the Phase 1 audit is in `docs/AUDIT.m
 - Pattern mode v2: equal-high/low and session-high liquidity, efficiency-based stop choice, higher-timeframe context.
 - Insights: optional AI rewording, limited to numbers the engine already produced. The rule-based layer is done.
 
-Hosting is intentionally not part of this push.
 
 ## License
 
