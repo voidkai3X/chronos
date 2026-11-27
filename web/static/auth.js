@@ -77,3 +77,9 @@ $("auth-form").addEventListener("submit", async e => {
   } finally { btn.disabled = false; }
 });
 })();
+
+/* Pause decorative animations when the tab is hidden. */
+(() => {
+  const vis = () => document.documentElement.classList.toggle("anim-paused", document.hidden);
+  document.addEventListener("visibilitychange", vis); vis();
+})();

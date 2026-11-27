@@ -488,7 +488,7 @@ function drawChart(tr) {
   c.beginPath(); pts.forEach((p, i) => i ? c.lineTo(X(p.x), Y(p.y)) : c.moveTo(X(p.x), Y(p.y)));
   c.strokeStyle = col; c.lineWidth = 2.2; c.lineJoin = "round"; c.shadowColor = "rgba(95,214,58,.35)"; c.shadowBlur = 5; c.stroke(); c.shadowBlur = 0;
   pts.slice(1).forEach(p => { c.beginPath(); c.arc(X(p.x), Y(p.y), 3, 0, 7);
-    c.fillStyle = p.t.status === "tp" ? "#3ccf91" : p.t.status === "sl" ? "#f2687a" : "#4cc22c"; c.fill();
+    c.fillStyle = p.t.status === "tp" ? "#3ddc84" : p.t.status === "sl" ? "#ff4d5e" : "#4cc22c"; c.fill();
     c.strokeStyle = "#010a03"; c.lineWidth = 1.2; c.stroke(); });
   c.fillStyle = "#8fa596";
   c.fillText("trade 1", L, H - 8);
@@ -792,5 +792,20 @@ function applyQuery() {
   if (!el) return;
   const p = n => String(n).padStart(2, "0");
   const tick = () => { const d = new Date(); el.textContent = `UTC ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`; };
-  tick(); setInterval(tick, 1000);
+  let t = null;
+  const start = () => { if (!t) { tick(); t = setInterval(tick, 1000); } };
+  const stop = () => { clearInterval(t); t = null; };
+  document.addEventListener("visibilitychange", () => document.hidden ? stop() : start());
+  if ("IntersectionObserver" in window) new IntersectionObserver(([e]) => e.isIntersecting && !document.hidden ? start() : stop()).observe(el);
+  start();
+})();
+
+/* Pause decorative animations when the tab is hidden or the header scrolls away. */
+(() => {
+  const root = document.documentElement;
+  const vis = () => root.classList.toggle("anim-paused", document.hidden);
+  document.addEventListener("visibilitychange", vis); vis();
+  const hero = document.querySelector(".hero");
+  if (hero && "IntersectionObserver" in window)
+    new IntersectionObserver(([e]) => hero.classList.toggle("off-screen", !e.isIntersecting)).observe(hero);
 })();
