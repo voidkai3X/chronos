@@ -465,32 +465,32 @@ function drawChart(tr) {
   const pts = [{ x: 0, y: 0 }]; let eq = 0;
   closed.forEach((t, i) => { eq += t.r_net; pts.push({ x: i + 1, y: eq, t }); });
   const L = 46, R = 14, T = 12, B = 28, w = W - L - R, h = H - T - B;
-  c.font = "11px ui-monospace,Menlo,monospace"; c.fillStyle = "#8a9ba7";
+  c.font = "11px ui-monospace,Menlo,monospace"; c.fillStyle = "#8fa596";
   if (closed.length === 0) { c.fillText("No closed trades to chart.", L, H / 2); return; }
   let lo = Math.min(0, ...pts.map(p => p.y)), hi = Math.max(0, ...pts.map(p => p.y));
   if (hi - lo < 1) { hi += .5; lo -= .5; }
   const padY = (hi - lo) * .08; lo -= padY; hi += padY;
   const X = x => L + (x / Math.max(1, pts.length - 1)) * w, Y = y => T + (hi - y) / (hi - lo) * h;
   const stepR = niceStep((hi - lo) / 5);
-  c.strokeStyle = "#13212b"; c.lineWidth = 1;
+  c.strokeStyle = "#0d2414"; c.lineWidth = 1;
   for (let v = Math.ceil(lo / stepR) * stepR; v <= hi; v += stepR) {
     c.beginPath(); c.moveTo(L, Y(v)); c.lineTo(W - R, Y(v)); c.stroke();
     c.fillText((v > 0 ? "+" : "") + v.toFixed(stepR < 1 ? 1 : 0) + "R", 4, Y(v) + 4);
   }
-  c.strokeStyle = "#2a4655"; c.setLineDash([4, 4]); c.beginPath(); c.moveTo(L, Y(0)); c.lineTo(W - R, Y(0)); c.stroke(); c.setLineDash([]);
-  const col = "#2ee6ff";
+  c.strokeStyle = "#2a5532"; c.setLineDash([4, 4]); c.beginPath(); c.moveTo(L, Y(0)); c.lineTo(W - R, Y(0)); c.stroke(); c.setLineDash([]);
+  const col = "#4dff1a";
   const top = Math.min(...pts.map(p => Y(p.y))), grd = c.createLinearGradient(0, top, 0, Y(0));
-  grd.addColorStop(0, "rgba(46,230,255,.28)"); grd.addColorStop(1, "rgba(46,230,255,0)");
-  const grdN = c.createLinearGradient(0, Y(0), 0, T + h); grdN.addColorStop(0, "rgba(46,230,255,0)"); grdN.addColorStop(1, "rgba(46,230,255,.14)");
+  grd.addColorStop(0, "rgba(77,255,26,.28)"); grd.addColorStop(1, "rgba(77,255,26,0)");
+  const grdN = c.createLinearGradient(0, Y(0), 0, T + h); grdN.addColorStop(0, "rgba(77,255,26,0)"); grdN.addColorStop(1, "rgba(77,255,26,.14)");
   c.beginPath(); pts.forEach((p, i) => i ? c.lineTo(X(p.x), Y(p.y)) : c.moveTo(X(p.x), Y(p.y)));
   c.lineTo(X(pts.length - 1), Y(0)); c.lineTo(X(0), Y(0)); c.closePath();
   c.save(); c.clip(); c.fillStyle = grd; c.fillRect(L, T, w, Y(0) - T); c.fillStyle = grdN; c.fillRect(L, Y(0), w, T + h - Y(0)); c.restore();
   c.beginPath(); pts.forEach((p, i) => i ? c.lineTo(X(p.x), Y(p.y)) : c.moveTo(X(p.x), Y(p.y)));
-  c.strokeStyle = col; c.lineWidth = 2.2; c.lineJoin = "round"; c.shadowColor = "rgba(46,230,255,.7)"; c.shadowBlur = 10; c.stroke(); c.shadowBlur = 0;
+  c.strokeStyle = col; c.lineWidth = 2.2; c.lineJoin = "round"; c.shadowColor = "rgba(77,255,26,.7)"; c.shadowBlur = 10; c.stroke(); c.shadowBlur = 0;
   pts.slice(1).forEach(p => { c.beginPath(); c.arc(X(p.x), Y(p.y), 3, 0, 7);
-    c.fillStyle = p.t.status === "tp" ? "#3ccf91" : p.t.status === "sl" ? "#f2687a" : "#19c8ff"; c.fill();
-    c.strokeStyle = "#05070a"; c.lineWidth = 1.2; c.stroke(); });
-  c.fillStyle = "#8a9ba7";
+    c.fillStyle = p.t.status === "tp" ? "#3ccf91" : p.t.status === "sl" ? "#f2687a" : "#39e61a"; c.fill();
+    c.strokeStyle = "#010a03"; c.lineWidth = 1.2; c.stroke(); });
+  c.fillStyle = "#8fa596";
   c.fillText("trade 1", L, H - 8);
   const endLbl = `trade ${closed.length} · ${wat(closed[closed.length - 1].exit)} WAT`;
   c.fillText(endLbl, W - R - c.measureText(endLbl).width, H - 8);
@@ -784,4 +784,13 @@ function applyQuery() {
   updateRR();
   if (q.get("run") === "1") run();
 }
+})();
+
+/* Small live UTC clock in the hero (display only). */
+(() => {
+  const el = document.getElementById("utc-clock");
+  if (!el) return;
+  const p = n => String(n).padStart(2, "0");
+  const tick = () => { const d = new Date(); el.textContent = `UTC ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`; };
+  tick(); setInterval(tick, 1000);
 })();
