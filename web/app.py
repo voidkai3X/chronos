@@ -15,6 +15,7 @@ sys.path.insert(0, ENGINE_DIR)
 sys.path.insert(0, HERE)
 import tester  # noqa: E402  (engine: load_markets, resolve_market, _fetch_chunks)
 import screenshot as shot  # noqa: E402
+import auth  # noqa: E402  (accounts: sign-up, sign-in, copy trading gate)
 
 RUN_TIMEOUT = int(os.environ.get("TESTER_TIMEOUT", "240"))  # first run of a market may backfill from OKX/Yahoo  # seconds per backtest
 MAX_PARALLEL = int(os.environ.get("TESTER_MAX_PARALLEL", "2"))
@@ -32,6 +33,7 @@ app = Flask(__name__, static_folder=os.path.join(HERE, "static"), static_url_pat
 app.config["DEBUG"] = False
 app.config["ENV"] = "production"
 app.config["MAX_CONTENT_LENGTH"] = shot.MAX_BYTES + 256 * 1024  # 5 MB image plus form overhead
+auth.init_app(app)
 
 
 def err(msg, code=400):
@@ -74,11 +76,18 @@ def client_ip():
     return remote or "unknown"
 
 
+app.config["CLIENT_IP_FN"] = client_ip
+
+
 def rate_limit_heavy():
     """Per-IP cap on /api/test, /api/compare, /api/scan and /api/screenshot. Returns a 429 response or None.
 
+    Also enforces sign-in for these tools when REQUIRE_LOGIN is on (off by default).
     Call rate_done_heavy() in a finally block if this returns None.
     """
+    gated = auth.gate_tools()
+    if gated:
+        return gated
     ip = client_ip()
     g.heavy_ip = ip
     now = time.time()
@@ -350,24 +359,44 @@ def asset_version():
 _ASSET_V = asset_version()
 
 
-@app.get("/")
-def index():
-    path = os.path.join(HERE, "static", "index.html")
+def _html_page(name):
+    path = os.path.join(HERE, "static", name)
     with open(path, encoding="utf-8") as f:
         html = f.read()
     ver = _ASSET_V
-    html = html.replace('href="/static/style.css"', f'href="/static/style.css?v={ver}"', 1)
-    html = html.replace('src="/static/app.js"', f'src="/static/app.js?v={ver}"', 1)
+    for asset in ("style.css", "app.js", "account.js", "auth.js"):
+        attr = "href" if asset.endswith(".css") else "src"
+        html = html.replace(f'{attr}="/static/{asset}"', f'{attr}="/static/{asset}?v={ver}"', 1)
     resp = app.response_class(html, mimetype="text/html; charset=utf-8")
     resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     resp.headers["Pragma"] = "no-cache"
     resp.headers["Expires"] = "0"
+    resp.headers["X-Frame-Options"] = "DENY"
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    resp.headers["Referrer-Policy"] = "same-origin"
     return resp
+
+
+@app.get("/signin")
+@app.get("/signup")
+@app.get("/forgot")
+def auth_page():
+    return _html_page("auth.html")
+
+
+@app.get("/copy-trading")
+def copy_trading_page():
+    return _html_page("index.html")
+
+
+@app.get("/")
+def index():
+    return _html_page("index.html")
 
 
 @app.get("/api/health")
 def health():
-    return jsonify(ok=True, screenshot=shot.enabled())
+    return jsonify(ok=True, screenshot=shot.enabled(), require_login=auth.require_login_enabled())
 
 
 @app.get("/api/markets")

@@ -165,13 +165,37 @@ python3 -m venv .venv
 .venv/bin/python app.py                 # serves http://0.0.0.0:8080
 ```
 
-Environment variables: `PORT` (default 8080), `HOST` (default 0.0.0.0), `TESTER_TIMEOUT` (seconds per backtest, default 150), `TESTER_MAX_PARALLEL` (concurrent backtests, default 2).
+Environment variables: `PORT` (default 8080), `HOST` (default 0.0.0.0), account settings below, `TESTER_TIMEOUT` (seconds per backtest, default 150), `TESTER_MAX_PARALLEL` (concurrent backtests, default 2).
 
 The app is a thin wrapper around `tester.py`. It calls the engine with `--json --json-out` and shows the verdict, stats, a cumulative-R equity curve, and every simulated trade. See `web/README.md` for the HTTP API.
 
 You can also upload a chart screenshot (PNG, JPG or WebP, up to 5 MB) and name the pattern (SMC, ICT, order block, and so on). If `OPENAI_API_KEY` is set, CHRONOS sends the image to OpenAI vision (`OPENAI_VISION_MODEL`, default `gpt-4o-mini`) and fills the market, side, timeframe and levels for you to review. It never starts a backtest on its own. Missing prices stay blank; it does not invent levels. If the key is not set, the panel says "Screenshot reading isn't enabled yet" and the rest of the app works as before. The screenshot endpoint uses the same per-IP heavy rate limit as a test, plus a daily cap (`RATE_SCREENSHOT_PER_DAY`, default 20) so a public link cannot run up an unexpected OpenAI bill.
 
 `web/app.py` finds `tester.py` in the repository root (the parent of `web/`).
+
+### Accounts (sign up, sign in) and Copy trading
+
+The web app has email + password accounts at `/signup`, `/signin` and `/forgot` (password reset by email is a "coming soon" stub; nothing is emailed yet). The header shows Sign in / Sign up, or your email and Sign out. A members-only **Copy trading** tab (`/copy-trading`) is a placeholder for now ("Strategies with a tested edge, coming soon") and always needs a signed-in account.
+
+- Passwords are hashed with scrypt (werkzeug). They are never stored or logged in plain text.
+- Sessions are signed cookies (HttpOnly, Secure, SameSite=Lax, 30 days) keyed by `SECRET_KEY`.
+- Every account POST needs the CSRF token from `GET /api/auth/me` in an `X-CSRF-Token` header.
+- Sign-in is rate limited per IP (`RATE_SIGNIN_PER_IP`, default 20 per 15 min) and per email (5 failed tries per 15 min). Sign-up is limited per IP (`RATE_SIGNUP_PER_IP`, default 5 per hour) and per email. A failed sign-in always says "Wrong email or password."
+- Each user has `plan` (default `free`), `created_at`, `free_until` (sign-up + `FREE_DAYS`, default 365) and `is_admin`, ready for paid access later.
+- `REQUIRE_LOGIN=1` makes the heavy tools (`/api/test`, `/api/compare`, `/api/scan`, `/api/screenshot`) need a signed-in account with access. It is off by default, so the backtester stays open to everyone.
+
+Storage: set `DATABASE_URL` to a Postgres URL (`postgres://` and `postgresql://` both work; psycopg 3 via SQLAlchemy). Without it, accounts go in a local SQLite file (`data/chronos.db`, or `SQLITE_PATH`). That is fine for local use, but on a host with a temporary disk (such as Render's free web service) SQLite accounts are wiped on every deploy or restart.
+
+| Variable | Purpose |
+|---|---|
+| `SECRET_KEY` | Signs session cookies. Required in production; without it a random key is used and everyone is signed out on restart. |
+| `DATABASE_URL` | Postgres for accounts. Falls back to SQLite. |
+| `REQUIRE_LOGIN` | `1` to require sign-in for the heavy tools. Default off. |
+| `FREE_DAYS` | Free period for new accounts, default 365. |
+| `COOKIE_INSECURE` | `1` only for local plain-http testing (drops the Secure cookie flag). |
+
+Account endpoints: `GET /api/auth/me`, `POST /api/auth/signup`, `POST /api/auth/signin`, `POST /api/auth/signout`, `POST /api/auth/forgot` (501, coming soon), `POST /api/auth/delete` (needs the password again), `GET /api/copy-trading` (members only).
+
 
 ## Methodology
 
@@ -282,6 +306,8 @@ Output includes orders, fills, unfilled orders, TP, SL and time exits; win rate 
 `python tests/test_screenshot.py` runs offline checks for screenshot reading (OpenAI is mocked): image type and size; fuzzy mapping of symbols such as `USD/JPY` and `BTC` onto MFP markets; missing prices stay blank; the review payload flags low-confidence and missing fields; the endpoint is disabled without `OPENAI_API_KEY`; friendly errors for a bad image or an unreadable chart; the screenshot route shares the heavy per-IP budget; and the daily cap is enforced.
 
 `python tests/test_shot_upload.py` checks the screenshot file picker: the file input is not nested inside the drop-zone label, both `input` and `change` are handled, empty MIME types are sniffed from magic bytes, and a Playwright Pixel run clicks the label and the Choose file control and shows a preview.
+
+`python tests/test_auth.py` runs offline account checks on a temporary SQLite file: sign-up creates a free user with a 365-day `free_until`; passwords are hashed and never logged; cookie flags; CSRF is required; generic sign-in errors; per-IP and per-email rate limits; Copy trading needs a sign-in and an active free period or paid plan; account deletion; the `REQUIRE_LOGIN` switch; and `DATABASE_URL` normalisation. `node tests/auth_e2e.cjs <base_url> [screenshot_dir]` runs the whole flow in a Pixel 7 browser against a running site and deletes its throwaway account afterwards.
 
 `python tests/test_compare.py` runs offline checks for `--compare`: more than 5 other markets is rejected; transferred levels keep the same ATR shape and R:R at a different price and ATR; pooled closed trades, TP/SL/time exits and total R match the concatenated trade list; and the one-line summary counts only the other pairs.
 

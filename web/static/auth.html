@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#05070a">
+<meta name="robots" content="noindex">
+<title>Sign in · CHRONOS</title>
+<link rel="icon" href="/static/assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/static/assets/apple-touch-icon.png">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="auth-body">
+<div class="bg-glow" aria-hidden="true"></div>
+<main class="auth-wrap">
+  <a class="brand auth-brand" href="/" aria-label="CHRONOS home">
+    <img class="mark" src="/static/assets/chronos-logo.png" alt="CHRONOS logo" width="120" height="67">
+    <span class="wordmark">CHRONOS</span>
+  </a>
+  <section class="panel auth-card" aria-labelledby="auth-h">
+    <h1 id="auth-h">Sign in</h1>
+    <p class="auth-sub" id="auth-sub">Welcome back. Sign in to your CHRONOS account.</p>
+    <div class="auth-free" id="auth-free" hidden>Free for your first year. No card needed.</div>
+    <form id="auth-form" novalidate>
+      <label class="lbl" for="email">Email</label>
+      <input id="email" name="email" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" maxlength="254" required placeholder="you@example.com">
+      <div id="pw-block">
+        <label class="lbl" for="password">Password</label>
+        <div class="pw-row">
+          <input id="password" name="password" type="password" autocomplete="current-password" minlength="8" maxlength="256" required placeholder="At least 8 characters">
+          <button type="button" class="pw-eye" id="pw-eye" aria-label="Show password" aria-pressed="false">Show</button>
+        </div>
+        <p class="pw-hint" id="pw-hint" hidden>At least 8 characters. A longer phrase is stronger.</p>
+      </div>
+      <div class="auth-err" id="auth-err" role="alert" hidden></div>
+      <div class="auth-ok" id="auth-ok" role="status" hidden></div>
+      <button class="btn-acc primary block" id="auth-submit" type="submit"><span class="txt">Sign in</span></button>
+    </form>
+    <div class="auth-links" id="auth-links"></div>
+  </section>
+  <p class="auth-foot muted">Read-only market data. CHRONOS never places trades. Past results are not a promise of future results.</p>
+</main>
+<script src="/static/auth.js"></script>
+</body>
+</html>

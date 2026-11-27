@@ -35,6 +35,14 @@ Candles are cached in `../candle_cache/` (shared with the CLI). The first run on
 
 ## API
 
+Accounts (see the main README for details):
+
+- `GET /api/auth/me` returns `{user, csrf, require_login}`. Send `csrf` back as `X-CSRF-Token` on every POST below.
+- `POST /api/auth/signup` and `POST /api/auth/signin` take `{"email", "password"}` (password at least 8 characters).
+- `POST /api/auth/signout`; `POST /api/auth/forgot` (501, coming soon); `POST /api/auth/delete` takes `{"password"}`.
+- `GET /api/copy-trading` is members only (401 when signed out).
+- With `REQUIRE_LOGIN=1`, the heavy endpoints below also need a signed-in account and the CSRF header.
+
 - `GET /api/markets?q=btc` returns the live MFP markets, filtered by `q`.
 - `GET /api/price?market=BTC` returns the last closed 15m close on the MFP feed. This is the same reference price the engine uses, cached for 60s.
 - `POST /api/test` takes this JSON body:

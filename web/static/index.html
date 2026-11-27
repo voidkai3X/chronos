@@ -15,6 +15,20 @@
 <div class="bg-glow" aria-hidden="true"></div>
 
 <header class="hero">
+  <nav class="topbar" aria-label="Main">
+    <div class="topbar-in">
+      <div class="tabs" role="tablist" aria-label="Sections">
+        <a class="tab on" id="tab-bt" href="/" role="tab" aria-selected="true" aria-controls="view-bt">Backtester</a>
+        <a class="tab" id="tab-ct" href="/copy-trading" role="tab" aria-selected="false" aria-controls="view-ct">Copy trading <span class="tab-badge">Members</span></a>
+      </div>
+      <div class="acct" id="acct" aria-live="polite">
+        <a class="acct-btn" id="acct-signin" href="/signin">Sign in</a>
+        <a class="acct-btn primary" id="acct-signup" href="/signup">Sign up</a>
+        <span class="acct-email" id="acct-email" hidden></span>
+        <button type="button" class="acct-btn" id="acct-signout" hidden>Sign out</button>
+      </div>
+    </div>
+  </nav>
   <div class="hero-in">
     <a class="brand" href="/" aria-label="CHRONOS home">
       <img class="mark" src="/static/assets/chronos-logo.png" alt="CHRONOS logo" width="120" height="67">
@@ -32,7 +46,7 @@
   </div>
 </header>
 
-<main class="wrap">
+<main class="wrap" id="view-bt" role="tabpanel" aria-labelledby="tab-bt">
   <section class="panel form-panel" aria-labelledby="setup-h">
     <div class="panel-title"><h2 id="setup-h">Your setup</h2><span class="step-hint">Screenshot or type · Review · Run</span></div>
     <form id="f" autocomplete="off" novalidate>
@@ -304,6 +318,29 @@
   </section>
 </main>
 
+<section class="ct-wrap" id="view-ct" role="tabpanel" aria-labelledby="tab-ct" hidden>
+  <div class="panel ct-panel">
+    <div class="ct-head">
+      <span class="ph-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 17l5-5 4 4 7-8"/><path d="M15 8h5v5"/></svg></span>
+      <h2>Copy trading</h2>
+      <span class="ct-pill">Members only</span>
+    </div>
+    <div id="ct-locked" class="ct-body">
+      <p class="ct-lead">Strategies with a tested edge, for CHRONOS members.</p>
+      <p class="muted">Sign in or create a free account to open this section. Accounts are free for the first year.</p>
+      <div class="ct-actions">
+        <a class="btn-acc primary" id="ct-signup" href="/signup?next=/copy-trading">Create free account</a>
+        <a class="btn-acc" id="ct-signin" href="/signin?next=/copy-trading">Sign in</a>
+      </div>
+    </div>
+    <div id="ct-open" class="ct-body" hidden>
+      <p class="ct-lead" id="ct-msg">Strategies with a tested edge, coming soon.</p>
+      <p class="muted">Each strategy here will come with its own backtest on real market history. Past results are not a promise of future results.</p>
+      <div class="ct-soon" aria-hidden="true"><span></span><span></span><span></span></div>
+    </div>
+  </div>
+</section>
+
 <footer class="foot">
   <div class="foot-in">
     <div class="foot-brand"><img src="/static/assets/chronos-logo.png" alt="" width="40" height="22"><span>CHRONOS</span></div>
@@ -312,6 +349,7 @@
   </div>
 </footer>
 <div class="toasts" id="toasts" aria-live="assertive"></div>
+<script src="/static/account.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>
