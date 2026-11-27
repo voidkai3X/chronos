@@ -72,6 +72,8 @@ async function loadMe() {
     const j = await r.json();
     state.user = j.user || null; state.csrf = j.csrf || null;
   } catch (_) {}
+  // page scripts after nav.js listen for chronos:auth; wait until they have all run
+  if (document.readyState === "loading") await new Promise(r => document.addEventListener("DOMContentLoaded", r, { once: true }));
   state.ready = true;
   render();
 }
