@@ -271,6 +271,12 @@ def delete_user(uid):
             library.delete_user_data(c, uid)
         except ImportError:
             pass
+        for name in ("practice", "journal"):  # replay sessions and journal entries go with the account too
+            try:
+                mod = __import__(name)
+            except ImportError:
+                continue
+            mod.delete_user_data(c, uid)
         c.execute(delete(users).where(users.c.id == uid))
 
 

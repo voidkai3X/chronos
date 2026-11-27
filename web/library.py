@@ -225,9 +225,9 @@ def snapshot_from_output(out, req):
                     rr=(out.get("setup") or {}).get("rr"), slippage=(out.get("costs") or {}).get("slippage"),
                     fees=out.get("fees")),
         provenance=dict(from_ms=data.get("from_ms"), to_ms=data.get("to_ms"), days=data.get("days"),
-                        bars=data.get("bars"), text=data.get("provenance_text"),
+                        bars=data.get("bars"), text=data.get("provenance_text"), fingerprint=data.get("fingerprint"),
                         sources=sorted({sg.get("source") for sg in prov.get("segments") or [] if sg.get("source")})),
-        engine_generated=out.get("generated"))
+        engine_generated=out.get("generated"), engine_version=out.get("engine_version"))
 
 
 def save_run(uid, sid, out, req):

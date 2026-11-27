@@ -21,12 +21,16 @@
     <a class="brand" href="/" aria-label="CHRONOS home"><svg class="inf mark" viewBox="0 0 120 60" role="img" aria-label="CHRONOS logo"><path class="inf-halo2" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-halo" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-tube" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-core" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/></svg><span class="wordmark">CHRONOS</span></a>
     <nav class="nav" id="nav" aria-label="Main">
       <div class="view-seg" id="view-seg" role="group" aria-label="Backtester views">
-        <button type="button" data-view="test" id="tab-bt" class="on" aria-controls="view-bt"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 3v18h18M7 15l4-4 3 3 6-7"/></svg><span class="l">Backtester</span><span class="s">Backtest</span></button>
-        <button type="button" data-view="cmp"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 20V11M12 20V4M18 20v-6"/></svg><span class="l">Compare</span><span class="s">Compare</span></button>
-        <button type="button" data-view="lib"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 3h12v18l-6-4-6 4z"/></svg><span class="l">My strategies</span><span class="s">Library</span></button>
+        <button type="button" data-view="test" id="tab-bt" data-nav="bt" class="on" aria-controls="view-bt"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 3v18h18M7 15l4-4 3 3 6-7"/></svg><span class="l">Backtester</span><span class="s">Backtest</span></button>
+        <button type="button" data-view="cmp" data-nav="cmp"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 20V11M12 20V4M18 20v-6"/></svg><span class="l">Compare</span><span class="s">Compare</span></button>
+        <button type="button" data-view="lib" data-nav="lib"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 3h12v18l-6-4-6 4z"/></svg><span class="l">My strategies</span><span class="s">Library</span></button>
       </div>
-      <button type="button" class="nav-res" id="nav-res" aria-label="Jump to results"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><span class="s">Results</span></button>
-      <a class="tab" id="tab-ct" href="/copy-trading" aria-controls="view-ct"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 17l5-5 4 4 7-8M15 8h5v5"/></svg><span class="l">Copy trading</span><span class="s">Copy</span><span class="tab-badge l">Members</span></a>
+      <button type="button" class="nav-res" id="nav-res" data-nav="res" aria-label="Jump to results"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><span class="s">Results</span></button>
+      <a class="tab" id="tab-rp" data-nav="rp" href="/replay"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 4.5v15l13-7.5z"/></svg><span class="l">Replay</span><span class="s">Replay</span></a>
+      <a class="tab" id="tab-jn" data-nav="jn" href="/journal"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 4h11a3 3 0 013 3v13H8a3 3 0 01-3-3zM5 17a3 3 0 013-3h11M9 8h6"/></svg><span class="l">Journal</span><span class="s">Journal</span></a>
+      <a class="tab" id="tab-calc" data-nav="calc" href="/calculator"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 3h12v18H6zM9 7h6M9 11h1M14 11h1M9 15h1M14 15h1M9 18h1M14 18h1"/></svg><span class="l">Calculator</span><span class="s">Calc</span></a>
+      <a class="tab" id="tab-ct" data-nav="ct" href="/copy-trading" aria-controls="view-ct"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 17l5-5 4 4 7-8M15 8h5v5"/></svg><span class="l">Copy trading</span><span class="s">Copy</span><span class="tab-badge l">Members</span></a>
+      <button type="button" class="nav-more" id="nav-more" data-nav="more" aria-haspopup="true" aria-expanded="false" aria-controls="more-sheet"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h.01M12 12h.01M19 12h.01" style="stroke-width:3"/></svg><span class="s">More</span></button>
     </nav>
     <div class="acct" id="acct" aria-live="polite">
       <a class="acct-btn" id="acct-signin" href="/signin">Sign in</a>
@@ -51,6 +55,12 @@
     </div>
   </div>
 </header>
+<div class="more-sheet" id="more-sheet" role="menu" aria-label="More sections" hidden>
+  <button type="button" role="menuitem" data-more="res"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Results</button>
+  <a role="menuitem" href="/?view=compare" data-more="cmp"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 20V11M12 20V4M18 20v-6"/></svg>Compare strategies</a>
+  <a role="menuitem" href="/calculator" data-more="calc"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 3h12v18H6zM9 7h6M9 11h1M14 11h1M9 15h1M14 15h1M9 18h1M14 18h1"/></svg>Risk calculator</a>
+  <a role="menuitem" href="/copy-trading" data-more="ct"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 17l5-5 4 4 7-8M15 8h5v5"/></svg>Copy trading</a>
+</div>
 
 <section class="hero" aria-label="About CHRONOS">
   <div class="hero-in">
@@ -229,6 +239,14 @@
       <details class="adv-cfg" id="adv-cfg">
         <summary><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h9M17 7h3M4 17h3M11 17h9M15 5v4M9 15v4"/></svg><span>Advanced settings</span><span class="adv-sum" id="adv-sum"></span></summary>
         <div class="adv-body">
+          <div class="sizing" id="sizing">
+            <span class="lbl">Position sizing <span class="opt">optional, for money figures</span></span>
+            <div class="grid2">
+              <div><label class="lbl sub" for="acct-size">Account size</label><input id="acct-size" type="number" min="0" step="any" inputmode="decimal" placeholder="e.g. 10000"></div>
+              <div><label class="lbl sub" for="risk-pct">Risk per trade (%)</label><input id="risk-pct" type="number" min="0.01" max="100" step="any" inputmode="decimal" value="1"></div>
+            </div>
+            <p class="help">Results stay in R, so sizing never changes the statistics. It adds your position size and money P/L (simple, not compounded). Kept on this device only.</p>
+          </div>
           <label class="lbl" for="htf">Higher-timeframe confirmation</label>
             <div class="sel"><select id="htf">
               <option value="off" selected>Off</option><option value="1h">1h trend must agree</option>
@@ -520,6 +538,7 @@
       </div>
       </div>
       <div class="meta" id="meta"></div>
+      <div class="repro" id="repro" hidden><span id="repro-txt"></span><button type="button" class="btn-ghost sm" id="cfg-dl">Download config (JSON)</button></div>
     </div>
 
     <div id="lib-res" class="lib-res" hidden>
@@ -659,5 +678,6 @@
 <script src="/static/p2.js"></script>
 <script src="/static/p3.js"></script>
 <script src="/static/ui.js"></script>
+<script src="/static/nav.js"></script>
 </body>
 </html>

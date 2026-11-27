@@ -9,6 +9,14 @@ const assert = require("assert");
 const path = require("path");
 const fs = require("fs");
 
+// phones keep Compare and Copy trading in the More sheet; desktop shows them in the top bar
+async function navClick(page, k) {
+  const sel = k === "ct" ? "#tab-ct" : `#view-seg [data-view="${k}"]`;
+  if (await page.isVisible(sel)) return page.click(sel);
+  await page.click("#nav-more");
+  await page.click(`#more-sheet [data-more="${k}"]`);
+}
+
 const base = (process.argv[2] || "http://127.0.0.1:8093").replace(/\/$/, "");
 const out = process.argv[3] || "web/screenshots";
 const ok = m => console.log("ok ", m);
@@ -65,7 +73,7 @@ async function checkReplay(page, shot) {
 }
 
 async function runCompare(page, n) {
-  await page.click('#view-seg [data-view="cmp"]');
+  await navClick(page, "cmp");
   await page.waitForSelector("#strat-list .st-row");
   while ((await page.$$("#strat-list .st-row")).length < n) await page.click("#strat-add");
   await page.click("#run");

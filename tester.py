@@ -109,7 +109,32 @@ def data_block(m, a, base, start_ms, end_ms, warm, trades=None):
     days_tested = int(days_tested) if days_tested == int(days_tested) else days_tested
     return eff, dict(source="see provenance", interval=a.interval, days=days_tested, days_requested=a.days,
                      bars=len(base), from_ms=eff, to_ms=end_ms, first_bar_ms=base[0][0] if base else None,
+                     last_bar_ms=base[-1][0] if base else None, fingerprint=data_fingerprint(base),
                      provenance=prov, provenance_text=sources.provenance_text(prov, days_tested) if prov else "")
+
+
+def data_fingerprint(bars):
+    """SHA-256 (first 16 hex) of the exact candles loaded: open time, open, high, low, close. Two runs with the same
+    fingerprint used identical market data."""
+    import hashlib
+    h = hashlib.sha256()
+    for b in bars:
+        h.update(("%d,%r,%r,%r,%r;" % (b[0], b[1], b[2], b[3], b[4])).encode())
+    return h.hexdigest()[:16]
+
+
+def engine_version():
+    """Commit of the engine code (Render sets RENDER_GIT_COMMIT; locally ask git)."""
+    for key in ("ASSET_VERSION", "RENDER_GIT_COMMIT"):
+        v = (os.environ.get(key) or "").strip()
+        if v:
+            return v[:12]
+    try:
+        import subprocess
+        return subprocess.check_output(["git", "rev-parse", "--short=12", "HEAD"], cwd=os.path.dirname(os.path.abspath(__file__)),
+                                       text=True, timeout=2, stderr=subprocess.DEVNULL).strip() or "unknown"
+    except Exception:
+        return "unknown"
 
 
 def resample(bars, step_ms):
@@ -1849,7 +1874,8 @@ def run_setup(a, mode, ctx, sl_buffer, sl_src, basket):
     htf = getattr(a, "htf_confirm", "off") or "off"
     params.update(setup_tf=tf, interval=a.interval, end_ms=ctx["end_ms"], htf_confirm=htf,
                   htf_rule=HTF_RULE.format(htf=htf) if htf != "off" else None)
-    head = dict(tool="mfp-setup-tester", generated=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), params=params)
+    head = dict(tool="mfp-setup-tester", generated=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), params=params,
+                engine_version=engine_version())
     if len(runs) == 1:
         out, trades = runs[0]
         out = dict(head, **out)

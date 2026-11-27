@@ -103,7 +103,10 @@ async function runAndCheck(page) {
     await (await mp.$("#results")).screenshot({ path: path.join(out, "p1-mobile-results.png") });
     // sticky nav to Copy trading still reachable after scrolling
     await mp.evaluate(() => window.scrollTo(0, document.body.scrollHeight / 2));
-    assert(await mp.isVisible("#tab-ct"), "Copy trading tab visible while scrolled");
+    assert(await mp.isVisible("#nav-more"), "More button visible while scrolled");
+    await mp.click("#nav-more");
+    assert(await mp.isVisible('#more-sheet [data-more="ct"]'), "Copy trading reachable from More while scrolled");
+    await mp.keyboard.press("Escape");
     ok("mobile form + results, no sideways scroll, nav reachable");
     await m.close();
     console.log("ALL_OK");

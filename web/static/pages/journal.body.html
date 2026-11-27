@@ -1,0 +1,102 @@
+<section class="page-head" aria-labelledby="page-h">
+  <div class="page-head-in">
+    <p class="tagline">Trading journal</p>
+    <h1 id="page-h">Record your real trades. Learn from your own numbers.</h1>
+    <p class="sub">Log each trade with its plan and outcome. CHRONOS works out R-multiples, planned vs actual R:R, sessions, weekly and monthly reports, and points out patterns only when your records contain enough trades to show them.</p>
+  </div>
+</section>
+<main class="wrap page-wrap" id="jn-main">
+  <section class="panel form-panel" aria-labelledby="jn-form-h">
+    <div class="panel-title"><h2 id="jn-form-h">Add a trade</h2><button type="button" class="btn-ghost sm" id="jn-new" hidden>New entry</button></div>
+    <div class="gate" id="jn-gate" hidden>
+      <p>Sign in to keep a journal. Entries are private to your account and can be exported or deleted at any time.</p>
+      <div class="gate-btns"><a class="btn-acc primary" href="/signin?next=/journal">Sign in</a><a class="btn-ghost" href="/signup?next=/journal">Create an account</a></div>
+    </div>
+    <form id="jn-form" autocomplete="off" novalidate>
+      <div class="grid2">
+        <div><label class="lbl" for="j-market">Instrument</label><input id="j-market" type="text" maxlength="40" required placeholder="e.g. BTCUSDT" autocapitalize="characters" spellcheck="false"></div>
+        <div><span class="lbl">Direction</span><div class="toggle seg" id="j-side" role="group" aria-label="Direction"><button type="button" data-s="long" class="on long" aria-pressed="true">Long</button><button type="button" data-s="short" aria-pressed="false">Short</button></div></div>
+      </div>
+      <div class="grid2">
+        <div><label class="lbl" for="j-entry">Entry price</label><input id="j-entry" type="number" step="any" inputmode="decimal" required></div>
+        <div><label class="lbl" for="j-exit">Exit price <span class="opt">empty if still open</span></label><input id="j-exit" type="number" step="any" inputmode="decimal"></div>
+      </div>
+      <div class="grid2">
+        <div><label class="lbl lbl-sl" for="j-sl">Stop-loss <span class="opt">initial</span></label><input id="j-sl" type="number" step="any" inputmode="decimal"></div>
+        <div><label class="lbl lbl-tp" for="j-tp">Take-profit</label><input id="j-tp" type="number" step="any" inputmode="decimal"></div>
+      </div>
+      <div class="grid2">
+        <div><label class="lbl" for="j-size">Position size <span class="opt">units</span></label><input id="j-size" type="number" step="any" min="0" inputmode="decimal"></div>
+        <div><label class="lbl" for="j-fees">Fees paid</label><input id="j-fees" type="number" step="any" min="0" inputmode="decimal"></div>
+      </div>
+      <label class="lbl" for="j-pnl">Profit / loss <span class="opt">worked out from size and prices if left empty</span></label>
+      <input id="j-pnl" type="number" step="any" inputmode="decimal">
+      <div class="grid2">
+        <div><label class="lbl" for="j-open">Opened</label><input id="j-open" type="datetime-local" required></div>
+        <div><label class="lbl" for="j-close">Closed</label><input id="j-close" type="datetime-local"></div>
+      </div>
+      <p class="help">Times are in your device's time zone. Session is set from the open time (UTC: Asia 0-7, London 7-13, New York 13-21, Late US 21-24) unless you choose one.</p>
+      <div class="grid2">
+        <div><label class="lbl" for="j-strategy">Strategy</label><div class="sel"><select id="j-strategy"><option value="">None</option></select></div></div>
+        <div><label class="lbl" for="j-session">Session</label><div class="sel"><select id="j-session"><option value="">Auto</option><option>Asia</option><option>London</option><option>New York</option><option>Late US</option></select></div></div>
+      </div>
+      <div class="grid2">
+        <div><label class="lbl" for="j-exitr">How it closed</label><div class="sel"><select id="j-exitr"><option value="">-</option><option value="tp">Take-profit hit</option><option value="sl">Stop-loss hit</option><option value="manual">Closed by hand</option><option value="breakeven">Break-even stop</option><option value="trailing">Trailing stop</option><option value="time">Time exit</option><option value="other">Other</option></select></div></div>
+        <div><label class="chk mini j-moved"><input id="j-moved" type="checkbox"><span class="box" aria-hidden="true"></span><span>I moved the stop</span></label></div>
+      </div>
+      <label class="lbl" for="j-tags">Tags <span class="opt">comma separated</span></label>
+      <input id="j-tags" type="text" maxlength="200" placeholder="e.g. A+ setup, news, revenge">
+      <label class="lbl" for="j-chart">Chart link <span class="opt">https link to a chart image, e.g. a TradingView snapshot</span></label>
+      <input id="j-chart" type="url" maxlength="500" placeholder="https://www.tradingview.com/x/…" inputmode="url" spellcheck="false">
+      <p class="help">Screenshot uploads need secure file storage, which CHRONOS does not have yet. A link keeps your chart with the trade in the meantime.</p>
+      <label class="lbl" for="j-notes">Notes</label>
+      <textarea id="j-notes" rows="3" maxlength="4000" placeholder="Why you took it, what you saw, how you felt, what you would change"></textarea>
+      <p class="calc-sum" id="j-preview" aria-live="polite"></p>
+      <div class="err" id="j-err" role="alert" hidden></div>
+      <div class="br-tbtns"><button type="submit" class="run" id="j-save"><span>Save trade</span></button><button type="button" class="btn-ghost" id="j-delete" hidden>Delete</button></div>
+    </form>
+  </section>
+
+  <section class="results" aria-label="Journal">
+    <div class="toggle seg jtabs" id="jn-tabs" role="tablist" aria-label="Journal views">
+      <button type="button" role="tab" data-v="trades" class="on" aria-selected="true">Trades</button>
+      <button type="button" role="tab" data-v="calendar" aria-selected="false">Calendar</button>
+      <button type="button" role="tab" data-v="reports" aria-selected="false">Reports</button>
+      <button type="button" role="tab" data-v="insights" aria-selected="false">Insights</button>
+    </div>
+
+    <div class="panel jv" data-v="trades">
+      <div class="jfilters" id="jn-filters">
+        <input id="f-q" type="search" placeholder="Search notes, tags, market, strategy" aria-label="Search">
+        <div class="sel"><select id="f-market" aria-label="Market"><option value="">All markets</option></select></div>
+        <div class="sel"><select id="f-strategy" aria-label="Strategy"><option value="">All strategies</option></select></div>
+        <div class="sel"><select id="f-outcome" aria-label="Outcome"><option value="">All outcomes</option><option value="win">Wins</option><option value="loss">Losses</option><option value="breakeven">Break-even</option></select></div>
+        <div class="sel"><select id="f-session" aria-label="Session"><option value="">All sessions</option><option>Asia</option><option>London</option><option>New York</option><option>Late US</option></select></div>
+        <div class="sel"><select id="f-side" aria-label="Direction"><option value="">Long and short</option><option value="long">Long</option><option value="short">Short</option></select></div>
+        <input id="f-from" type="date" aria-label="From date"><input id="f-to" type="date" aria-label="To date">
+      </div>
+      <div class="kpis2 br-stats" id="jn-sum"></div>
+      <div class="t-tools"><span class="muted small" id="jn-count"></span><button type="button" class="btn-ghost sm" id="jn-csv">Download CSV</button></div>
+      <div class="tbl-wrap"><table class="jn-table"><thead><tr><th>Opened</th><th>Market</th><th>Side</th><th>Entry</th><th>Exit</th><th>R</th><th>Plan R:R</th><th>P/L</th><th>Strategy</th><th>Session</th></tr></thead><tbody id="jn-rows"></tbody></table></div>
+    </div>
+
+    <div class="panel jv" data-v="calendar" hidden>
+      <div class="cal-head"><button type="button" class="btn-ghost sm" id="cal-prev" aria-label="Previous month">‹</button><b id="cal-title"></b><button type="button" class="btn-ghost sm" id="cal-next" aria-label="Next month">›</button></div>
+      <div class="cal" id="cal" role="grid" aria-label="Trades by day"></div>
+      <p class="muted small" id="cal-sum"></p>
+    </div>
+
+    <div class="panel jv" data-v="reports" hidden>
+      <div class="cal-head">
+        <div class="toggle seg" id="rep-period" role="group" aria-label="Report period"><button type="button" data-p="week" class="on" aria-pressed="true">Weekly</button><button type="button" data-p="month" aria-pressed="false">Monthly</button></div>
+        <button type="button" class="btn-ghost sm" id="rep-prev" aria-label="Previous period">‹</button><b id="rep-title"></b><button type="button" class="btn-ghost sm" id="rep-next" aria-label="Next period">›</button>
+      </div>
+      <div id="rep-body"></div>
+    </div>
+
+    <div class="panel jv" data-v="insights" hidden>
+      <div class="panel-h">Behaviour observations <span class="muted">from your own entries, with the counts behind each one</span></div>
+      <div id="ins-body"></div>
+    </div>
+  </section>
+</main>

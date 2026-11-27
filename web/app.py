@@ -17,6 +17,8 @@ import tester  # noqa: E402  (engine: load_markets, resolve_market, _fetch_chunk
 import screenshot as shot  # noqa: E402
 import auth  # noqa: E402  (accounts: sign-up, sign-in, copy trading gate)
 import library  # noqa: E402  (saved strategies + run snapshots; registers its tables before the engine starts)
+import practice  # noqa: E402  (Blind Replay sessions)
+import journal  # noqa: E402  (trading journal)
 
 RUN_TIMEOUT = int(os.environ.get("TESTER_TIMEOUT", "240"))  # first run of a market may backfill from OKX/Yahoo  # seconds per backtest
 MAX_PARALLEL = int(os.environ.get("TESTER_MAX_PARALLEL", "2"))
@@ -36,6 +38,8 @@ app.config["ENV"] = "production"
 app.config["MAX_CONTENT_LENGTH"] = shot.MAX_BYTES + 256 * 1024  # 5 MB image plus form overhead
 auth.init_app(app)
 app.register_blueprint(library.bp)
+app.register_blueprint(practice.bp)
+app.register_blueprint(journal.bp)
 
 
 def err(msg, code=400):
@@ -211,6 +215,10 @@ def resolve(name):
         return tester.resolve_market(name, tester.load_markets())
     except SystemExit as e:
         raise ValueError(str(e))
+
+
+practice.HOOKS.update(rate_limit=lambda: rate_limit_heavy(), rate_done=lambda: rate_done_heavy(),
+                      market_lock=lambda mid: market_lock(mid), resolve=lambda name: resolve(name))
 
 
 def _strategy_id(d):
@@ -469,7 +477,8 @@ def _html_page(name):
     with open(path, encoding="utf-8") as f:
         html = f.read()
     ver = _ASSET_V
-    for asset in ("style.css", "app.js", "p2.js", "p3.js", "account.js", "auth.js", "ui.js",
+    for asset in ("style.css", "app.js", "p2.js", "p3.js", "account.js", "auth.js", "ui.js", "nav.js", "practice.js",
+                  "journal.js", "calc.js",
                   "vendor/lightweight-charts.standalone.production.js"):
         attr = "href" if asset.endswith(".css") else "src"
         html = html.replace(f'{attr}="/static/{asset}"', f'{attr}="/static/{asset}?v={ver}"', 1)
@@ -488,6 +497,21 @@ def _html_page(name):
 @app.get("/forgot")
 def auth_page():
     return _html_page("auth.html")
+
+
+@app.get("/replay")
+def replay_page():
+    return _html_page("practice.html")
+
+
+@app.get("/journal")
+def journal_page():
+    return _html_page("journal.html")
+
+
+@app.get("/calculator")
+def calculator_page():
+    return _html_page("calc.html")
 
 
 @app.get("/copy-trading")

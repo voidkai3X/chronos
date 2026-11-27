@@ -75,6 +75,7 @@ def block(rs, risk_pct=RISK_PCT):
         avg_rr_achieved=rnd(avg_w / -avg_l) if (avg_w is not None and avg_l) else None,
         profit_factor=rnd(pf, 2), profit_factor_infinite=bool(n and pf is None and wins),
         max_drawdown_r=round(dd, 3), max_drawdown_pct=round(dd * risk_pct, 2),
+        recovery_factor=rnd(total / -dd, 2) if dd < 0 else None,
         longest_win_streak=bw, longest_loss_streak=bl,
         best_r=rnd(max(rs)) if rs else None, worst_r=rnd(min(rs)) if rs else None,
         sd_r=rnd(sd), t_stat=rnd(exp / (sd / math.sqrt(n)), 2) if n > 1 and sd > 0 else None)
@@ -178,7 +179,25 @@ def compute(trades, setups_identified=None, setups_basis=None, risk_pct=RISK_PCT
             sl_gap_fills=sum(1 for t in closed if t.get("exit_reason") == "sl_gap_open"),
             tp_on_fill_bar_ignored=sum(1 for t in closed if t.get("tp_touched_on_fill_bar")),
             trades_across_gaps=sum(1 for t in trades if t.get("gap_bars_in_trade")),
-            overlapping_trades=count_overlaps(trades)))
+            overlapping_trades=count_overlaps(trades)),
+        max_concurrent=max_concurrent(trades))
+
+
+def max_concurrent(trades):
+    """Most filled positions open at the same moment (per the fill and exit times). A trade still open at the end
+    of the data counts as open until the end. Exits are processed before fills at the same timestamp."""
+    ev = []
+    for t in trades:
+        if "filled" not in t:
+            continue
+        ev.append((t["filled"], 1))
+        if t.get("exit"):
+            ev.append((t["exit"], -1))
+    cur = best = 0
+    for _, d in sorted(ev, key=lambda e: (e[0], e[1])):
+        cur += d
+        best = max(best, cur)
+    return best
 
 
 def count_overlaps(trades):

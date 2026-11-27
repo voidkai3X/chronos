@@ -12,6 +12,14 @@ const assert = require("assert");
 const path = require("path");
 const fs = require("fs");
 
+// phones keep Compare and Copy trading in the More sheet; desktop shows them in the top bar
+async function navClick(page, k) {
+  const sel = k === "ct" ? "#tab-ct" : `#view-seg [data-view="${k}"]`;
+  if (await page.isVisible(sel)) return page.click(sel);
+  await page.click("#nav-more");
+  await page.click(`#more-sheet [data-more="${k}"]`);
+}
+
 const base = (process.argv[2] || "http://127.0.0.1:8093").replace(/\/$/, "");
 const shots = process.argv[3];
 const WIDTHS = [360, 390, 430, 768, 1280, 1440];
@@ -132,7 +140,7 @@ async function fillSetup(page) {
       await check(page, W, "replay"); await snap(page, W, "replay");
       await page.keyboard.press("Escape"); await page.waitForSelector("#rp", { state: "hidden" });
 
-      await page.click('#view-seg [data-view="cmp"]');
+      await navClick(page, "cmp");
       await page.waitForSelector("#strat-list .st-row");
       await check(page, W, "compare form");
       if (W === 1440 || W === 390) {
@@ -146,7 +154,7 @@ async function fillSetup(page) {
       await page.evaluate(() => window.scrollTo(0, 0));
       await check(page, W, "library"); await snap(page, W, "library");
       await page.click('#view-seg [data-view="test"]');
-      await page.click("#tab-ct"); await page.waitForSelector("#view-ct:not([hidden])");
+      await navClick(page, "ct"); await page.waitForSelector("#view-ct:not([hidden])");
       await check(page, W, "copy trading"); await snap(page, W, "copy-trading");
       await page.click('#view-seg [data-view="lib"]'); // a view button leaves Copy trading
       assert(await page.isVisible("#view-bt"), "view buttons return from Copy trading");

@@ -1,0 +1,52 @@
+<section class="page-head" aria-labelledby="page-h">
+  <div class="page-head-in">
+    <p class="tagline">Trade risk calculator</p>
+    <h1 id="page-h">Size the position before you take the trade</h1>
+    <p class="sub">Position size, risk, stop distance, potential profit and loss, and risk to reward. Calculated on this device; nothing is saved to your account.</p>
+  </div>
+</section>
+<main class="wrap page-wrap" id="calc-main">
+  <section class="panel form-panel" aria-labelledby="calc-h">
+    <div class="panel-title"><h2 id="calc-h">Your trade</h2></div>
+    <form id="calc-form" autocomplete="off" novalidate>
+      <span class="lbl" id="c-type-l">Instrument type</span>
+      <div class="toggle seg wrap-toggle" id="c-type" role="group" aria-labelledby="c-type-l">
+        <button type="button" data-t="crypto" class="on" aria-pressed="true">Crypto</button>
+        <button type="button" data-t="forex" aria-pressed="false">Forex</button>
+        <button type="button" data-t="xau" aria-pressed="false">Gold</button>
+        <button type="button" data-t="xag" aria-pressed="false">Silver</button>
+        <button type="button" data-t="index" aria-pressed="false">Index</button>
+        <button type="button" data-t="stock" aria-pressed="false">Stock</button>
+      </div>
+      <p class="help" id="c-spec"></p>
+      <label class="lbl" for="c-sym">Symbol <span class="opt">for pips, USD conversion and the price lookup</span></label>
+      <div class="inline-row"><input id="c-sym" type="text" maxlength="20" placeholder="e.g. BTC, EURUSD, XAU" autocapitalize="characters" spellcheck="false">
+        <button type="button" class="btn-ghost" id="c-price">Use last price</button></div>
+      <p class="help" id="c-price-note"></p>
+      <div class="grid2">
+        <div><label class="lbl" for="c-acct">Account size (USD)</label><input id="c-acct" type="number" min="0" step="any" inputmode="decimal" placeholder="10000"></div>
+        <div><label class="lbl" for="c-mode">Risk as</label><div class="sel"><select id="c-mode"><option value="pct">% of account</option><option value="amount">Fixed amount</option></select></div></div>
+      </div>
+      <div id="c-pct-wrap"><label class="lbl" for="c-riskpct">Risk per trade (%)</label><input id="c-riskpct" type="number" min="0" max="100" step="any" inputmode="decimal" value="1"></div>
+      <div id="c-amt-wrap" hidden><label class="lbl" for="c-riskamt">Amount to risk (USD)</label><input id="c-riskamt" type="number" min="0" step="any" inputmode="decimal"></div>
+      <div class="grid3 levels">
+        <div><label class="lbl" for="c-entry">Entry</label><input id="c-entry" type="number" step="any" inputmode="decimal"></div>
+        <div><label class="lbl lbl-sl" for="c-sl">Stop-loss</label><input id="c-sl" type="number" step="any" inputmode="decimal"></div>
+        <div><label class="lbl lbl-tp" for="c-tp">Take-profit <span class="opt">optional</span></label><input id="c-tp" type="number" step="any" inputmode="decimal"></div>
+      </div>
+      <div id="c-q2u-wrap" hidden><label class="lbl" for="c-q2u" id="c-q2u-lbl">Quote currency to USD rate</label><input id="c-q2u" type="number" min="0" step="any" inputmode="decimal" placeholder="e.g. 1.27 for GBP"></div>
+      <label class="chk"><input id="c-fees" type="checkbox" checked><span class="box" aria-hidden="true"></span><span>Include MFP commission<span class="muted">Charged per fill on the position value and counted inside your risk. Swap/funding is not included.</span></span></label>
+      <div class="err" id="c-err" role="alert" hidden></div>
+    </form>
+  </section>
+  <section class="results" aria-labelledby="calc-res-h">
+    <div class="panel">
+      <div class="panel-h" id="calc-res-h">Result</div>
+      <p class="calc-sum" id="c-sum" aria-live="polite">Enter your levels to see the position size.</p>
+      <div class="kpis calc-cards" id="c-out"></div>
+      <p class="help">Long or short is read from your stop: below the entry is a long, above is a short. Contract sizes are common
+        standards; your broker or venue may use different lot sizes, minimum steps, leverage limits or fees. Check them before trading.
+        This is a sizing tool, not advice, and no result here is a promise of profit.</p>
+    </div>
+  </section>
+</main>

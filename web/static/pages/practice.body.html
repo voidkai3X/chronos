@@ -1,0 +1,115 @@
+<section class="page-head" aria-labelledby="page-h">
+  <div class="page-head-in">
+    <p class="tagline">Blind Replay</p>
+    <h1 id="page-h">Practise on real history without seeing the future</h1>
+    <p class="sub">CHRONOS picks a random window of real market candles. Only the past is on your chart: the next candle stays on the server until you step forward. Decide, size the trade, and see how your decisions play out.</p>
+  </div>
+</section>
+<main class="wrap page-wrap" id="rp-main">
+  <section class="panel form-panel" aria-labelledby="rp-setup-h">
+    <div class="panel-title"><h2 id="rp-setup-h">New session</h2></div>
+    <div class="gate" id="rp-gate" hidden>
+      <p>Sign in to practise. Your sessions, trades and daily and weekly stats are saved to your account.</p>
+      <div class="gate-btns"><a class="btn-acc primary" href="/signin?next=/replay">Sign in</a><a class="btn-ghost" href="/signup?next=/replay">Create an account</a></div>
+    </div>
+    <form id="rp-form" autocomplete="off" novalidate>
+      <span class="lbl" id="rp-mode-l">Mode</span>
+      <div class="toggle seg" id="rp-mode" role="group" aria-labelledby="rp-mode-l">
+        <button type="button" data-m="practice" class="on" aria-pressed="true">Practice</button>
+        <button type="button" data-m="strategy" aria-pressed="false">Strategy</button>
+        <button type="button" data-m="challenge" aria-pressed="false">Challenge</button>
+      </div>
+      <p class="help" id="rp-mode-help">A random window of real candles on the market you choose.</p>
+      <div id="rp-strat-wrap" hidden>
+        <label class="lbl" for="rp-strat">Saved strategy</label>
+        <div class="sel"><select id="rp-strat"><option value="">Loading your strategies…</option></select></div>
+      </div>
+      <label class="lbl" for="rp-market">Market</label>
+      <input id="rp-market" type="text" list="rp-markets" maxlength="40" placeholder="e.g. BTC, ETH, EURUSD, XAU" spellcheck="false" autocapitalize="characters">
+      <datalist id="rp-markets"></datalist>
+      <span class="lbl" id="rp-tf-l">Timeframe</span>
+      <div class="toggle seg" id="rp-tf" role="group" aria-labelledby="rp-tf-l">
+        <button type="button" data-tf="15m" aria-pressed="false">15m</button>
+        <button type="button" data-tf="1h" class="on" aria-pressed="true">1h</button>
+        <button type="button" data-tf="4h" aria-pressed="false">4h</button>
+      </div>
+      <div class="grid2">
+        <div><label class="lbl" for="rp-risk">Risk per trade (%)</label><input id="rp-risk" type="number" min="0.05" max="5" step="0.05" value="1" inputmode="decimal"></div>
+        <div><span class="lbl">Virtual account</span><div class="static-val num">10,000</div></div>
+      </div>
+      <label class="chk"><input id="rp-hide" type="checkbox" checked><span class="box" aria-hidden="true"></span><span>Hide the real dates<span class="muted">Dates are shifted by whole weeks until the session ends, so you cannot recall what happened. Weekday and time of day stay true.</span></span></label>
+      <div class="rules" id="rp-rules" hidden>
+        <b>Challenge rules</b>
+        <ul><li>Start with 10,000 virtual</li><li>Risk at most 1% per trade</li><li>Pass at +6%, fail at -5% from the start</li><li>At most 10 trades, longer 1h window</li></ul>
+      </div>
+      <div class="err" id="rp-err" role="alert" hidden></div>
+      <button type="submit" class="run block" id="rp-start"><span>Start session</span></button>
+      <p class="help">Fills and exits use the backtester's conservative rules: a market order fills at the next open; stop and target in one candle counts as the stop; a target touch on the fill candle does not count; MFP fees are deducted. Slippage is not modelled. Practice results do not predict live results.</p>
+    </form>
+  </section>
+
+  <section class="results" aria-label="Replay">
+    <div class="panel br-empty" id="rp-empty">
+      <h3>No session running</h3>
+      <p class="muted">Choose a market and timeframe, then start. You will see about 150 past candles; everything after them is hidden.</p>
+    </div>
+    <div id="rp-live" hidden>
+      <div class="panel br-board">
+        <div class="br-top">
+          <div><div class="br-title" id="rp-title"></div><div class="muted small" id="rp-sub"></div></div>
+          <div class="br-bal"><span class="muted small">Balance</span><b class="num" id="rp-balance">10,000.00</b><span class="small" id="rp-ret"></span></div>
+        </div>
+        <div class="br-chart lwc" id="rp-chart" role="img" aria-label="Replay chart: only revealed candles"></div>
+        <div class="br-controls" role="group" aria-label="Replay controls">
+          <button type="button" class="btn-ghost" id="rp-next" title="Reveal the next candle">Next candle</button>
+          <button type="button" class="btn-ghost" id="rp-next5">+5</button>
+          <button type="button" class="btn-ghost" id="rp-play" aria-pressed="false">Play</button>
+          <div class="sel br-speed"><select id="rp-speed" aria-label="Replay speed"><option value="1000">1×</option><option value="500" selected>2×</option><option value="250">4×</option><option value="125">8×</option></select></div>
+          <button type="button" class="btn-ghost" id="rp-skip" title="Record that you saw this candle and chose not to trade">Skip setup</button>
+          <button type="button" class="btn-ghost" id="rp-finish">End session</button>
+        </div>
+        <p class="muted small" id="rp-remaining" aria-live="polite"></p>
+      </div>
+
+      <div class="panel" id="rp-ticket-panel">
+        <div class="panel-h">Order ticket <span class="muted" id="rp-last"></span></div>
+        <div id="rp-strategy-box" class="rules" hidden></div>
+        <form id="rp-ticket" autocomplete="off" novalidate>
+          <div class="grid2">
+            <div><span class="lbl">Side</span>
+              <div class="toggle seg" id="rp-side" role="group" aria-label="Side"><button type="button" data-s="long" class="on long" aria-pressed="true">Long</button><button type="button" data-s="short" aria-pressed="false">Short</button></div></div>
+            <div><span class="lbl">Order</span>
+              <div class="toggle seg" id="rp-kind" role="group" aria-label="Order type"><button type="button" data-k="market" class="on" aria-pressed="true">Market</button><button type="button" data-k="limit" aria-pressed="false">Limit</button></div></div>
+          </div>
+          <div class="grid3 levels">
+            <div><label class="lbl" for="rp-entry">Entry</label><input id="rp-entry" type="number" step="any" inputmode="decimal" placeholder="next open"></div>
+            <div><label class="lbl lbl-sl" for="rp-sl">Stop-loss</label><input id="rp-sl" type="number" step="any" inputmode="decimal"></div>
+            <div><label class="lbl lbl-tp" for="rp-tp">Take-profit</label><input id="rp-tp" type="number" step="any" inputmode="decimal"></div>
+          </div>
+          <div class="grid2">
+            <div><label class="lbl" for="rp-trisk">Risk (%)</label><input id="rp-trisk" type="number" min="0.01" max="5" step="0.05" inputmode="decimal"></div>
+            <div><span class="lbl">Size</span><div class="static-val num" id="rp-size">-</div></div>
+          </div>
+          <div class="err" id="rp-terr" role="alert" hidden></div>
+          <div class="br-tbtns">
+            <button type="submit" class="run" id="rp-place"><span>Place order</span></button>
+            <button type="button" class="btn-ghost" id="rp-cancel" hidden>Cancel order</button>
+            <button type="button" class="btn-ghost" id="rp-close" hidden>Close at last price</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="panel">
+        <div class="panel-h">This session</div>
+        <div class="kpis2 br-stats" id="rp-stats"></div>
+        <div class="tbl-wrap"><table class="br-table"><thead><tr><th>#</th><th>Side</th><th>Entry</th><th>SL</th><th>TP</th><th>Exit</th><th>Result</th><th>R</th><th>P/L</th></tr></thead><tbody id="rp-trades"></tbody></table></div>
+        <p class="muted small" id="rp-sources"></p>
+      </div>
+    </div>
+
+    <div class="panel" id="rp-history">
+      <div class="panel-h">Practice statistics <span class="muted">grouped by when you practised (your time zone)</span></div>
+      <div id="rp-agg"><p class="muted">Sign in to see your practice statistics.</p></div>
+    </div>
+  </section>
+</main>

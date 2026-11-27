@@ -439,6 +439,56 @@ function badgeFor(v) {
   if (v.startsWith("edge")) return ["edge", "Edge on this sample"];
   return ["few", v];
 }
+// position sizing from the trader's own account size and risk % (device-only). R results are unchanged.
+function sizing() {
+  const a = parseFloat(($("acct-size") || {}).value), r = parseFloat(($("risk-pct") || {}).value);
+  return a > 0 && r > 0 && r <= 100 ? { acct: a, risk: r, amt: a * r / 100 } : null;
+}
+const money = v => (v < 0 ? "-" : "") + Math.abs(v).toLocaleString("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 });
+function sizingCards(o, n) {
+  const z = sizing(); if (!z) return [];
+  const g = o.setup || {}, dist = Math.abs((g.entry || 0) - (g.sl || 0));
+  const units = dist > 0 ? z.amt / dist : null;
+  return [
+    card("Position size (your levels)", units == null ? "n/a" : `${+units.toPrecision(4)} units`,
+      `risking ${money(z.amt)} (${z.risk}% of ${money(z.acct)}) on a ${fmt(dist)} stop · notional ${units == null ? "n/a" : money(units * g.entry)}`),
+    card("Net P/L in money", money((n.total_r || 0) * z.amt), `${sgnR(n.total_r)} × ${money(z.amt)} per R · simple, not compounded`, n.total_r > 0 ? "pos" : n.total_r < 0 ? "neg" : ""),
+    card("Max drawdown in money", money((n.max_drawdown_r || 0) * z.amt), `${(n.max_drawdown_r || 0).toFixed(2)}R × ${money(z.amt)}`, n.max_drawdown_r < 0 ? "neg" : ""),
+  ];
+}
+function renderSizing(o) {
+  const box = $("sizing-row"); if (!box) return;
+  const n = o && o.stats && o.stats.net;
+  const cs = n ? sizingCards(o, n) : [];
+  box.hidden = !cs.length;
+  box.innerHTML = cs.length ? `<div class="sizing-h">Your sizing <span class="muted">from Advanced settings · results stay in R</span></div><div class="kpis2">${cs.join("")}</div>` : "";
+}
+function renderRepro(o) {
+  const d = o.data || {}, box = $("repro"); if (!box) return;
+  box.hidden = false;
+  $("repro-txt").textContent = `Reproducibility: engine ${o.engine_version || "unknown"} · data fingerprint ${d.fingerprint || "n/a"} (${d.bars || 0} candles, ${d.interval || ""}) · every setting is in the config file.`;
+}
+if ($("cfg-dl")) $("cfg-dl").addEventListener("click", () => {
+  const o = lastResult; if (!o) return;
+  const d = o.data || {};
+  const cfg = { tool: "CHRONOS", kind: "backtest-config", generated: o.generated, engine_version: o.engine_version || null,
+    request: lastRequest, params: o.params, market: o.market, setup: o.setup, fees: o.fees, costs: o.costs,
+    data: { interval: d.interval, from_ms: d.from_ms, to_ms: d.to_ms, first_bar_ms: d.first_bar_ms, last_bar_ms: d.last_bar_ms, bars: d.bars,
+      fingerprint: d.fingerprint, provenance_text: d.provenance_text },
+    note: "Re-run with the same request. Identical results need the same engine version and the same candles (same fingerprint)." };
+  const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: "application/json" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = `chronos-config-${(o.market.market_id.split("|").pop() || "test").replace(/[^A-Za-z0-9_-]/g, "")}-${(o.generated || "").replace(/[^0-9]/g, "").slice(0, 12)}.json`;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+});
+// sizing inputs live on this device only
+(() => {
+  const ks = [["acct-size", "chronos.acct"], ["risk-pct", "chronos.risk"]];
+  ks.forEach(([id, k]) => { const el = $(id); if (!el) return;
+    try { const v = localStorage.getItem(k); if (v != null && v !== "") el.value = v; } catch (e) {}
+    const upd = () => { try { localStorage.setItem(k, el.value); } catch (e) {} if (lastResult) renderSizing(lastResult); };
+    el.addEventListener("input", upd); el.addEventListener("change", upd); });
+})();
 function card(k, v, d, cls, kpi) { return `<div class="card${kpi ? " kpi" : ""}"><div class="k">${k}</div><div class="v ${cls || ""}">${v}</div>${d ? `<div class="d">${d}</div>` : ""}</div>`; }
 function render(o) {
   lastResult = o;
@@ -505,10 +555,14 @@ function render(o) {
       card("Avg time in trade", hrs(st.duration_h.avg), `winners ${hrs(st.duration_h.avg_win)} · losers ${hrs(st.duration_h.avg_loss)}`),
       ...zcard, ...scard,
       card("Stop-sweep check", `${s.sl_then_tp} / ${s.sl}`, `stop-outs that still reached TP within ${p.sweep_window}`),
+      card("Recovery factor", n.recovery_factor == null ? "n/a" : Number(n.recovery_factor).toFixed(2), `net R ÷ max drawdown · theoretical ${gr.recovery_factor == null ? "n/a" : Number(gr.recovery_factor).toFixed(2)}`, n.recovery_factor == null ? "" : (n.recovery_factor > 0 ? "pos" : "neg")),
+      card("Max concurrent positions", st.max_concurrent == null ? "n/a" : st.max_concurrent, p.one_at_a_time === false ? "most trades open at once (overlap allowed)" : "one order or trade at a time"),
     ];
     const wasOpen = !!document.querySelector("#cards details.more-stats[open]");
     $("cards").innerHTML = `<div class="kpis">${kpis.join("")}</div>` +
+      `<div class="sizing-row" id="sizing-row" hidden></div>` +
       `<details class="more-stats"${wasOpen ? " open" : ""}><summary>More numbers <span class="muted">${more.length} more from this test</span></summary><div class="kpis2">${more.join("")}</div></details>`;
+    renderSizing(o);
     renderGvn(st, o);
     renderWhy(st.why || []);
     renderOutcomes(st);
@@ -533,6 +587,7 @@ function render(o) {
     `Tie rule: ${p.tie_rule}. Look-ahead: ${p.lookahead_rule || "only closed candles are used"}. Placement: ${p.placement}. ` +
     `Generated ${o.generated.replace("T", " ").replace("Z", " UTC")}` + (o.elapsed_s != null ? `, ran in ${o.elapsed_s}s.` : ".");
   renderProvenance(o.data);
+  renderRepro(o);
   renderInsights(o.insights);
   renderSimilarMatches(o);
   tradeSort = { key: null, dir: 1 };
