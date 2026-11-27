@@ -478,17 +478,17 @@ function drawChart(tr) {
     c.fillText((v > 0 ? "+" : "") + v.toFixed(stepR < 1 ? 1 : 0) + "R", 4, Y(v) + 4);
   }
   c.strokeStyle = "#2a5532"; c.setLineDash([4, 4]); c.beginPath(); c.moveTo(L, Y(0)); c.lineTo(W - R, Y(0)); c.stroke(); c.setLineDash([]);
-  const col = "#4dff1a";
+  const col = "#5fd63a";
   const top = Math.min(...pts.map(p => Y(p.y))), grd = c.createLinearGradient(0, top, 0, Y(0));
-  grd.addColorStop(0, "rgba(77,255,26,.28)"); grd.addColorStop(1, "rgba(77,255,26,0)");
-  const grdN = c.createLinearGradient(0, Y(0), 0, T + h); grdN.addColorStop(0, "rgba(77,255,26,0)"); grdN.addColorStop(1, "rgba(77,255,26,.14)");
+  grd.addColorStop(0, "rgba(95,214,58,.18)"); grd.addColorStop(1, "rgba(95,214,58,0)");
+  const grdN = c.createLinearGradient(0, Y(0), 0, T + h); grdN.addColorStop(0, "rgba(95,214,58,0)"); grdN.addColorStop(1, "rgba(95,214,58,.09)");
   c.beginPath(); pts.forEach((p, i) => i ? c.lineTo(X(p.x), Y(p.y)) : c.moveTo(X(p.x), Y(p.y)));
   c.lineTo(X(pts.length - 1), Y(0)); c.lineTo(X(0), Y(0)); c.closePath();
   c.save(); c.clip(); c.fillStyle = grd; c.fillRect(L, T, w, Y(0) - T); c.fillStyle = grdN; c.fillRect(L, Y(0), w, T + h - Y(0)); c.restore();
   c.beginPath(); pts.forEach((p, i) => i ? c.lineTo(X(p.x), Y(p.y)) : c.moveTo(X(p.x), Y(p.y)));
-  c.strokeStyle = col; c.lineWidth = 2.2; c.lineJoin = "round"; c.shadowColor = "rgba(77,255,26,.7)"; c.shadowBlur = 10; c.stroke(); c.shadowBlur = 0;
+  c.strokeStyle = col; c.lineWidth = 2.2; c.lineJoin = "round"; c.shadowColor = "rgba(95,214,58,.35)"; c.shadowBlur = 5; c.stroke(); c.shadowBlur = 0;
   pts.slice(1).forEach(p => { c.beginPath(); c.arc(X(p.x), Y(p.y), 3, 0, 7);
-    c.fillStyle = p.t.status === "tp" ? "#3ccf91" : p.t.status === "sl" ? "#f2687a" : "#39e61a"; c.fill();
+    c.fillStyle = p.t.status === "tp" ? "#3ccf91" : p.t.status === "sl" ? "#f2687a" : "#4cc22c"; c.fill();
     c.strokeStyle = "#010a03"; c.lineWidth = 1.2; c.stroke(); });
   c.fillStyle = "#8fa596";
   c.fillText("trade 1", L, H - 8);
