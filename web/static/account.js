@@ -61,8 +61,10 @@ function showTab(t) {
   const ct = t === "ct";
   $("view-bt").hidden = ct;
   $("view-ct").hidden = !ct;
-  document.querySelector(".hero-in").hidden = ct;
-  $("tab-bt").classList.toggle("on", !ct);
+  const hero = document.querySelector(".hero") || document.querySelector(".hero-in");
+  if (hero) hero.hidden = ct;
+  // the Backtester button's own "on" state belongs to the view switcher (p2.js); in Copy trading it is dimmed via body.tab-ct
+  document.body.classList.toggle("tab-ct", ct);
   $("tab-ct").classList.toggle("on", ct);
   $("tab-bt").setAttribute("aria-selected", String(!ct));
   $("tab-ct").setAttribute("aria-selected", String(ct));
@@ -79,6 +81,13 @@ function go(e, t, path) {
 $("tab-bt").addEventListener("click", e => go(e, "bt", "/"));
 $("tab-ct").addEventListener("click", e => go(e, "ct", "/copy-trading"));
 window.addEventListener("popstate", () => showTab(currentTab()));
+window.CHRONOS_NAV = {
+  current: currentTab,
+  show(t) {
+    const path = t === "ct" ? "/copy-trading" : "/";
+    if (currentTab() !== t) { history.pushState({ tab: t }, "", path + (t === "bt" ? location.search : "")); showTab(t); window.scrollTo(0, 0); }
+  },
+};
 
 let copyLoadedFor = null;
 async function renderCopy() {

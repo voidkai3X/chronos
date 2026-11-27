@@ -339,6 +339,12 @@ Output includes orders, fills, unfilled orders, TP, SL and time exits; win rate 
 
 `python tests/test_auth.py` runs offline account checks on a temporary SQLite file: sign-up creates a free user with a 365-day `free_until`; passwords are hashed and never logged; cookie flags; CSRF is required; generic sign-in errors; per-IP and per-email rate limits; Copy trading needs a sign-in and an active free period or paid plan; account deletion; the `REQUIRE_LOGIN` switch; and `DATABASE_URL` normalisation. `node tests/auth_e2e.cjs <base_url> [screenshot_dir]` runs the whole flow in a Pixel 7 browser against a running site and deletes its throwaway account afterwards.
 
+### Interface (v2 visual refinement)
+
+The interface keeps the CHRONOS name, infinity mark, green-black background and lime accent; `docs/DESIGN_AUDIT.md` lists what was changed and why. Fonts are self-hosted (Geist for UI text, Geist Mono for numbers, Nunito for the wordmark; SIL OFL). The equity/drawdown chart and the trade replay use TradingView Lightweight Charts v5.3.0, vendored under `web/static/vendor/` with its Apache-2.0 licence and NOTICE (attribution link in the page footer and the chart logo); if the library fails to load, the older canvas charts are drawn instead. Charts only ever show the test's own trades and stored candles.
+
+`node tests/design_qa.cjs <base_url> [screenshot_dir]` walks every view (form, advanced settings, loading, each results tab, replay, compare, library, Copy trading, account menu, sign-in) at 360, 390, 430, 768, 1280 and 1440 px and fails on page-level horizontal overflow or, at touch widths, any control smaller than 44 x 44 px; with a directory it also saves `ui2-desktop-*.png` and `ui2-mobile-*.png`. `node tests/ui2_markets.cjs <base_url>` runs real BTC, XAU and EURUSD tests through the form and checks the v2 results, charts and replay.
+
 `python tests/test_compare.py` runs offline checks for `--compare`: more than 5 other markets is rejected; transferred levels keep the same ATR shape and R:R at a different price and ATR; pooled closed trades, TP/SL/time exits and total R match the concatenated trade list; and the one-line summary counts only the other pairs.
 
 `python tests/test_entries.py` runs offline checks for the sweep and confirm entries:

@@ -1,0 +1,5 @@
+TradingView Lightweight Charts(TM)
+Copyright (c) 2026 TradingView, Inc. https://www.tradingview.com/
+
+Version 5.3.0, self-hosted unmodified from the npm package "lightweight-charts" under the Apache License 2.0 (see lightweight-charts.LICENSE.txt).
+It bundles fancy-canvas 2.1.0 (MIT).

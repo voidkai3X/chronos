@@ -42,6 +42,7 @@ const crypto = require("crypto");
     if (shots) await page.screenshot({ path: path.join(shots, "copy-trading-mobile.png") });
     step("signed up and Copy trading open: " + (await page.textContent("#ct-msg")).trim());
 
+    await page.click("#acct-menu-btn"); // v2: sign out lives in the account menu
     await page.click("#acct-signout");
     await page.waitForSelector("#ct-locked:not([hidden])");
     assert(await page.isVisible("#acct-signin"));

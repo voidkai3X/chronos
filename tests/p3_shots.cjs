@@ -41,6 +41,7 @@ async function checkEdge(page) {
   assert(/not a prediction/.test(await page.textContent("#edge-disc")), "disclaimer");
   const v = await page.textContent("#verdict");
   if (sc < 45) assert(!/possible edge|edge on this sample/.test(v), "verdict agrees with a low score: " + v);
+  await page.click('#res-tabs [data-tab="analysis"]'); // v2 results are organised in tabs
   assert(await page.isVisible("#adv-panel"), "analytics");
   assert(/90% range/.test(await page.textContent("#adv-boot")), "bootstrap");
   assert(/95th percentile/.test(await page.textContent("#adv-mc")), "monte carlo");

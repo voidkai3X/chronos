@@ -24,7 +24,10 @@ async function fillSetup(page) {
   await page.fill("#tp", String(Math.round(p0 * 1.017)));
 }
 
+const tab = (page, name) => page.click(`#res-tabs [data-tab="${name}"]`); // v2 results are organised in tabs
+async function openAdv(page) { if (!(await page.$eval("#adv-cfg", d => d.open))) await page.click("#adv-cfg > summary"); }
 async function checkConditions(page) {
+  await tab(page, "analysis");
   await page.waitForSelector("#cond-panel:not([hidden])");
   await page.waitForTimeout(900); // let the existing panel fade-in finish before screenshots
   const dims = await page.$$eval("#cond-grid .cond-dim", e => e.length);
@@ -35,6 +38,7 @@ async function checkConditions(page) {
 }
 
 async function checkReplay(page, shot) {
+  await tab(page, "trades");
   await page.click("#trades .rp-open");
   await page.waitForSelector("#rp:not([hidden])");
   await page.waitForFunction(() => /match the ones used in the test|differ/.test(document.getElementById("rp-src").textContent), null, { timeout: 60000 });
@@ -85,10 +89,12 @@ async function runCompare(page, n) {
     await page.goto(base + "/", { waitUntil: "networkidle" });
     await fillSetup(page);
     await page.selectOption("#similar-tf", "1h");
+    await openAdv(page);
     await page.check("#tf-sweep");
     await page.locator("#tf-block").screenshot({ path: path.join(out, "p2-desktop-timeframe-form.png") });
     await page.click("#run");
     await page.waitForSelector("#res:not([hidden])", { timeout: 400000 });
+    await tab(page, "analysis");
     await page.waitForSelector("#tfs-panel:not([hidden])");
     const tfs = await page.$$eval("#tfs tbody tr td:first-child", e => e.map(x => x.textContent.trim()));
     assert.deepStrictEqual(tfs, ["5m", "15m", "30m", "1h", "4h", "Daily"], "six timeframes");
@@ -129,6 +135,7 @@ async function runCompare(page, n) {
     await mp.locator("#cond-panel").screenshot({ path: path.join(out, "p2-mobile-conditions.png") });
     let sw = await mp.evaluate(() => document.documentElement.scrollWidth);
     assert(sw <= 391, "no sideways scroll on results: " + sw);
+    await tab(mp, "trades");
     await mp.locator("#trades .rp-open").first().scrollIntoViewIfNeeded();
     await checkReplay(mp, path.join(out, "p2-mobile-replay.png"));
     await mp.evaluate(() => window.scrollTo(0, 0));

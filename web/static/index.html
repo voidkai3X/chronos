@@ -3,39 +3,57 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#010a03">
+<meta name="theme-color" content="#050c08">
 <meta name="description" content="CHRONOS: backtest your trade setup on real market history. Read-only public market data.">
 <title>CHRONOS · Backtest your setup on real market history</title>
 <link rel="icon" href="/static/assets/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/static/assets/favicon-32.png" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="/static/assets/apple-touch-icon.png">
-<link rel="preload" href="/static/assets/fonts/inter-var-latin.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="/static/assets/fonts/nunito-var-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/static/assets/fonts/geist-var.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/static/assets/fonts/geist-mono-var.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<div class="bg-glow" aria-hidden="true"><div class="bg-grid"></div><div class="bg-sweep"></div></div>
+<div class="bg-glow" aria-hidden="true"><div class="bg-grid"></div></div>
 
-<header class="hero">
-  <nav class="topbar" aria-label="Main">
-    <div class="topbar-in">
-      <div class="tabs" role="tablist" aria-label="Sections">
-        <a class="tab on" id="tab-bt" href="/" role="tab" aria-selected="true" aria-controls="view-bt">Backtester</a>
-        <a class="tab" id="tab-ct" href="/copy-trading" role="tab" aria-selected="false" aria-controls="view-ct">Copy trading <span class="tab-badge">Members</span></a>
+<header class="topbar" id="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="/" aria-label="CHRONOS home"><svg class="inf mark" viewBox="0 0 120 60" role="img" aria-label="CHRONOS logo"><path class="inf-halo2" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-halo" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-tube" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-core" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/></svg><span class="wordmark">CHRONOS</span></a>
+    <nav class="nav" id="nav" aria-label="Main">
+      <div class="view-seg" id="view-seg" role="group" aria-label="Backtester views">
+        <button type="button" data-view="test" id="tab-bt" class="on" aria-controls="view-bt"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 3v18h18M7 15l4-4 3 3 6-7"/></svg><span class="l">Backtester</span><span class="s">Backtest</span></button>
+        <button type="button" data-view="cmp"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 20V11M12 20V4M18 20v-6"/></svg><span class="l">Compare</span><span class="s">Compare</span></button>
+        <button type="button" data-view="lib"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 3h12v18l-6-4-6 4z"/></svg><span class="l">My strategies</span><span class="s">Library</span></button>
       </div>
-      <div class="acct" id="acct" aria-live="polite">
-        <a class="acct-btn" id="acct-signin" href="/signin">Sign in</a>
-        <a class="acct-btn primary" id="acct-signup" href="/signup">Sign up</a>
-        <span class="acct-email" id="acct-email" hidden></span>
-        <button type="button" class="acct-btn" id="acct-signout" hidden>Sign out</button>
+      <button type="button" class="nav-res" id="nav-res" aria-label="Jump to results"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><span class="s">Results</span></button>
+      <a class="tab" id="tab-ct" href="/copy-trading" aria-controls="view-ct"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 17l5-5 4 4 7-8M15 8h5v5"/></svg><span class="l">Copy trading</span><span class="s">Copy</span><span class="tab-badge l">Members</span></a>
+    </nav>
+    <div class="acct" id="acct" aria-live="polite">
+      <a class="acct-btn" id="acct-signin" href="/signin">Sign in</a>
+      <a class="acct-btn primary" id="acct-signup" href="/signup">Sign up</a>
+      <button type="button" class="acct-menu-btn" id="acct-menu-btn" aria-haspopup="true" aria-expanded="false" aria-controls="acct-menu" aria-label="Account" hidden><span class="acct-av" id="acct-av" aria-hidden="true"></span><span class="acct-email" id="acct-email" hidden></span><svg class=acct-chev viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg></button>
+      <div class="acct-menu" id="acct-menu" hidden>
+        <div class="am-head"><svg class="inf mark" viewBox="0 0 120 60" aria-hidden="true" focusable="false"><path class="inf-halo2" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-halo" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-tube" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-core" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/></svg><div><div class="am-email" id="am-email"></div><div class="am-plan" id="am-plan"></div></div></div>
+        <dl class="am-dl" id="am-dl"></dl>
+        <div class="am-links">
+          <button type="button" data-go="lib"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 3h12v18l-6-4-6 4z"/></svg>My strategies</button>
+          <button type="button" data-go="ct"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 17l5-5 4 4 7-8M15 8h5v5"/></svg>Copy trading</button>
+        </div>
+        <button type="button" class="am-out" id="acct-signout" hidden><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg><span>Sign out</span></button>
+        <details class="am-del" id="am-del"><summary>Delete account</summary>
+          <p>Deletes your account, your saved strategies and their run history. This cannot be undone.</p>
+          <label class="lbl" for="am-del-pw">Confirm with your password</label>
+          <input id="am-del-pw" type="password" autocomplete="current-password" maxlength="256">
+          <button type="button" class="btn-acc" id="am-del-go">Delete my account</button>
+          <div class="err" id="am-del-err" role="alert" hidden></div>
+        </details>
       </div>
     </div>
-  </nav>
+  </div>
+</header>
+
+<section class="hero" aria-label="About CHRONOS">
   <div class="hero-in">
-    <a class="brand" href="/" aria-label="CHRONOS home">
-      <svg class="inf mark" viewBox="0 0 120 60" role="img" aria-label="CHRONOS logo"><path class="inf-halo" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-halo2" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-tube" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-core" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-trace" pathLength="100" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-trace inf-trace2" pathLength="100" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/></svg>
-      <span class="wordmark">CHRONOS</span>
-    </a>
     <div class="hero-copy">
       <p class="tagline">Every trader has an edge worth discovering.</p>
       <h1>Backtest your setup on real market history</h1>
@@ -48,15 +66,12 @@
       <li class="clock-pill" aria-label="Current UTC time"><span class="clock-ico" aria-hidden="true"><i></i></span><span id="utc-clock">UTC --:--:--</span></li>
     </ul>
   </div>
-</header>
+</section>
 
 <main class="wrap" id="view-bt" role="tabpanel" aria-labelledby="tab-bt">
   <section class="panel form-panel" aria-labelledby="setup-h">
+    <div class="form-head">
     <div class="panel-title"><h2 id="setup-h">Your setup</h2><span class="step-hint">Screenshot or type · Review · Run</span></div>
-    <div class="toggle seg view-seg" id="view-seg" role="group" aria-label="What to do">
-      <button type="button" data-view="test" class="on">Test a setup</button>
-      <button type="button" data-view="cmp">Compare strategies</button>
-      <button type="button" data-view="lib">My strategies</button>
     </div>
     <p class="help view-help" id="view-help" hidden>Run 2 to 6 strategies on the same market, window, timeframe, fees and slippage, then compare them side by side. Your levels set the market, side and R:R.</p>
     <div class="lib-side" id="lib-side" hidden>
@@ -73,12 +88,9 @@
       </div>
     </div>
     <form id="f" autocomplete="off" novalidate>
-      <div id="shot-panel" class="shot-panel">
-        <label class="lbl" id="shot-h">From a screenshot</label>
-        <p class="shot-lead" id="shot-lead">Upload a chart and name the pattern. CHRONOS reads the pair, side and levels so you can review them, then run the test as usual.</p>
-        <div id="shot-off" class="shot-off" hidden>Screenshot reading isn't enabled yet</div>
-        <div id="shot-on">
-          <label class="lbl" for="shot-pattern">Pattern</label>
+    <div class="fsec" id="sec-a">
+      <div class="fsec-h"><span class="fsec-n" aria-hidden="true">A</span><div><h3>Strategy setup</h3><p>Pattern, chart, market, direction and levels</p></div></div>
+          <label class="lbl" for="shot-pattern">Pattern <span class="opt">optional label</span></label>
           <input id="shot-pattern" type="text" maxlength="120" placeholder="e.g. SMC, ICT, order block..." autocomplete="off">
           <div class="shot-picks" id="shot-picks" role="group" aria-label="Pattern shortcuts">
             <button type="button" data-pattern="SMC">SMC</button>
@@ -90,7 +102,14 @@
             <button type="button" data-pattern="Breakout">Breakout</button>
             <button type="button" data-pattern="Order flow">Order flow</button>
           </div>
+      <div id="shot-panel" class="shot-panel">
+        <label class="lbl" id="shot-h">Chart screenshot <span class="opt">optional</span></label>
+        <p class="shot-lead" id="shot-lead">Upload a chart and name the pattern. CHRONOS reads the pair, side and levels so you can review them, then run the test as usual.</p>
+        <div id="shot-off" class="shot-off" hidden>Screenshot reading isn't enabled yet</div>
+        <div id="shot-on">
+          <div class="shot-row">
           <label class="shot-drop" id="shot-drop" for="shot-file" tabindex="0">
+            <svg class=shot-ico viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>
             <div id="shot-drop-txt">
               <b>Drop a chart here or choose a file</b>
               <span>PNG, JPG or WebP, up to 5 MB</span>
@@ -108,12 +127,12 @@
             <span class="shot-choose-txt">Choose file</span>
             <input id="shot-file" class="shot-choose-input" type="file" accept="image/*,image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp">
           </div>
+          </div>
           <button id="shot-run" class="run shot-run" type="button"><span class="spin" hidden></span><span class="txt">Read screenshot</span></button>
           <div id="shot-err" class="err" role="alert" hidden></div>
           <div id="shot-review" class="shot-review" hidden></div>
         </div>
       </div>
-
       <label class="lbl" for="market">Market</label>
       <div class="ac">
         <svg class="ac-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
@@ -122,16 +141,34 @@
       </div>
       <div class="price-line"><span id="mkt-id" class="mkt-id"></span><span id="price" class="price"></span></div>
       <p class="help">Any of the 100+ MFP markets: crypto, FX, metals, stocks and indices.</p>
-
-      <div class="seg-row">
-        <div>
-          <span class="lbl">Side</span>
+      <span class="lbl">Direction</span>
           <div class="toggle seg" id="side" role="group" aria-label="Side">
             <button type="button" data-side="long" class="on long">▲ Long</button>
             <button type="button" data-side="short" class="short">▼ Short</button>
           </div>
-        </div>
+      <div class="grid3 levels">
+        <div><label class="lbl" for="entry">Entry</label><input id="entry" type="number" step="any" required inputmode="decimal"></div>
+        <div><label class="lbl lbl-tp" for="tp">Take profit</label><input id="tp" type="number" step="any" required inputmode="decimal"></div>
+        <div><label class="lbl lbl-sl" for="sl">Stop loss</label><input id="sl" type="number" step="any" required inputmode="decimal"></div>
       </div>
+      <div class="rr-line"><span class="rr-k">R:R</span><b id="rr">-</b><span id="rr-note" class="muted"></span></div>
+      <p class="help">Levels are on this market's prices. CHRONOS keeps the same distances, scaled by volatility (ATR), at each past setup.</p>
+      <div id="lvl-err" class="inline-err" hidden></div>
+    </div>
+      <div class="strat-block" id="strat-block" hidden>
+        <span class="lbl">Strategies to compare</span>
+        <div id="strat-list" class="strat-list"></div>
+        <button type="button" class="btn-ghost" id="strat-add">Add a strategy</button>
+        <p class="help" id="strat-limit"></p>
+        <details class="note strat-named">
+          <summary>Which named patterns CHRONOS can test</summary>
+          <ul id="strat-named"></ul>
+          <p>Any other name works as a label on one of these rules or on your own levels. CHRONOS can't test a pattern it can't define as a rule, so it won't pretend to.</p>
+        </details>
+        <p class="help" id="strat-store-note">Saved on this device. Signed in, you can move them into My strategies.</p>
+      </div>
+    <div class="fsec" id="sec-b">
+      <div class="fsec-h"><span class="fsec-n" aria-hidden="true">B</span><div><h3>Backtest configuration</h3><p>Method, timeframe, window and filters</p></div></div>
       <div class="mode-block">
         <span class="lbl">How to find past setups</span>
         <div class="toggle seg" id="mode" role="group" aria-label="How to find past setups">
@@ -141,29 +178,14 @@
         </div>
         <p class="help" id="mode-help">Finds past moments whose price action looked like your chart, then replays your trade there.</p>
       </div>
-
       <div class="tf-block" id="tf-block">
-        <div class="grid2">
-          <div>
-            <label class="lbl" for="similar-tf">Setup timeframe</label>
+        <label class="lbl" for="similar-tf">Setup timeframe</label>
             <div class="sel"><select id="similar-tf">
               <option value="5m">5m</option><option value="15m">15m</option><option value="30m">30m</option>
               <option value="1h" selected>1h</option><option value="4h">4h</option><option value="1d">Daily</option>
             </select></div>
-          </div>
-          <div>
-            <label class="lbl" for="htf">Higher-timeframe confirmation</label>
-            <div class="sel"><select id="htf">
-              <option value="off" selected>Off</option><option value="1h">1h trend must agree</option>
-              <option value="4h">4h trend must agree</option><option value="1d">Daily trend must agree</option>
-            </select></div>
-          </div>
-        </div>
         <p class="help" id="tf-help">The chart timeframe of your setup. 5m setups are simulated on 5m candles, all others on 15m candles. Daily setups use daily candles built from 15m data, so a 90-day window holds only about 90 of them.</p>
-        <p class="help" id="htf-help">Optional. Only takes a setup when the higher timeframe agrees: on its last closed candle, price is above a rising EMA(20) for a long (below a falling one for a short). Only candles already closed at the signal are used.</p>
-        <label class="chk" id="tfs-row"><input id="tf-sweep" type="checkbox"><span class="box" aria-hidden="true"></span><span>Also run on every timeframe <span class="muted">5m, 15m, 30m, 1h, 4h and daily under identical conditions, then compare them (takes longer)</span></span></label>
       </div>
-
       <div id="similar-opts" class="grid2 sub-opts">
         <div>
           <label class="lbl" for="similar-bars">Candles in the fingerprint</label>
@@ -188,16 +210,6 @@
           <option value="confirm">Wait for a 15m break of structure after the tap</option>
         </select></div>
       </div>
-
-      <div class="grid3 levels">
-        <div><label class="lbl" for="entry">Entry</label><input id="entry" type="number" step="any" required inputmode="decimal"></div>
-        <div><label class="lbl lbl-tp" for="tp">Take profit</label><input id="tp" type="number" step="any" required inputmode="decimal"></div>
-        <div><label class="lbl lbl-sl" for="sl">Stop loss</label><input id="sl" type="number" step="any" required inputmode="decimal"></div>
-      </div>
-      <div class="rr-line"><span class="rr-k">R:R</span><b id="rr">-</b><span id="rr-note" class="muted"></span></div>
-      <p class="help">Levels are on this market's prices. CHRONOS keeps the same distances, scaled by volatility (ATR), at each past setup.</p>
-      <div id="lvl-err" class="inline-err" hidden></div>
-
       <div class="grid2">
         <div>
           <label class="lbl" for="days">Test window: <b id="days-v">90</b> days</label>
@@ -213,32 +225,23 @@
           <p class="help">An order that hasn't filled by then is cancelled.</p>
         </div>
       </div>
-      <div class="grid2">
-        <div>
+      <label class="chk"><input id="trend" type="checkbox"><span class="box" aria-hidden="true"></span><span>Trend filter <span class="muted">only place when the 4h EMA50 slope agrees with the side</span></span></label>
+      <details class="adv-cfg" id="adv-cfg">
+        <summary><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h9M17 7h3M4 17h3M11 17h9M15 5v4M9 15v4"/></svg><span>Advanced settings</span><span class="adv-sum" id="adv-sum"></span></summary>
+        <div class="adv-body">
+          <label class="lbl" for="htf">Higher-timeframe confirmation</label>
+            <div class="sel"><select id="htf">
+              <option value="off" selected>Off</option><option value="1h">1h trend must agree</option>
+              <option value="4h">4h trend must agree</option><option value="1d">Daily trend must agree</option>
+            </select></div>
+        <p class="help" id="htf-help">Optional. Only takes a setup when the higher timeframe agrees: on its last closed candle, price is above a rising EMA(20) for a long (below a falling one for a short). Only candles already closed at the signal are used.</p>
           <label class="lbl" for="max-hold">Time stop</label>
           <div class="sel"><select id="max-hold">
             <option value="24h">24h</option><option value="3d">3d</option><option value="7d" selected>7d</option>
             <option value="14d">14d</option><option value="none">None</option>
           </select></div>
           <p class="help">A filled trade still open after this exits at market.</p>
-        </div>
-      </div>
-      <label class="chk"><input id="trend" type="checkbox"><span class="box" aria-hidden="true"></span><span>Trend filter <span class="muted">only place when the 4h EMA50 slope agrees with the side</span></span></label>
-      <label class="chk" id="insights-row"><input id="insights" type="checkbox"><span class="box" aria-hidden="true"></span><span>Insights <span class="muted">explain the result and compare limit / wider stop / sweep / confirm entries (a few seconds more; pattern-oriented)</span></span></label>
-
-      <div class="strat-block" id="strat-block" hidden>
-        <span class="lbl">Strategies to compare</span>
-        <div id="strat-list" class="strat-list"></div>
-        <button type="button" class="btn-ghost" id="strat-add">Add a strategy</button>
-        <p class="help" id="strat-limit"></p>
-        <details class="note strat-named">
-          <summary>Which named patterns CHRONOS can test</summary>
-          <ul id="strat-named"></ul>
-          <p>Any other name works as a label on one of these rules or on your own levels. CHRONOS can't test a pattern it can't define as a rule, so it won't pretend to.</p>
-        </details>
-        <p class="help" id="strat-store-note">Saved on this device. Signed in, you can move them into My strategies.</p>
-      </div>
-
+        <label class="chk" id="tfs-row"><input id="tf-sweep" type="checkbox"><span class="box" aria-hidden="true"></span><span>Also run on every timeframe <span class="muted">5m, 15m, 30m, 1h, 4h and daily under identical conditions, then compare them (takes longer)</span></span></label>
       <div class="costs-block">
         <span class="lbl">Costs and execution</span>
         <p class="help">MFP trading fees and overnight swap are always included. Slippage is the extra price lost on market-type fills: market or stop entries, stop-loss exits and time exits. Limit entries and take profits fill at their own price. 1 bps = 0.01% of price; ticks use the market's tick size.</p>
@@ -257,13 +260,18 @@
         </div>
         <label class="chk" id="overlap-row"><input id="overlap" type="checkbox"><span class="box" aria-hidden="true"></span><span>Allow overlapping trades <span class="muted">Off (recommended): one order or trade at a time. On: a new setup can open while another trade is still running.</span></span></label>
       </div>
-
-      <button id="run" class="run" type="submit"><span class="spin" hidden></span><span class="txt">Run test</span></button>
+      <label class="chk" id="insights-row"><input id="insights" type="checkbox"><span class="box" aria-hidden="true"></span><span>Insights <span class="muted">explain the result and compare limit / wider stop / sweep / confirm entries (a few seconds more; pattern-oriented)</span></span></label>
+        </div>
+      </details>
+    </div>
+    <div class="run-bar">
+      <button id="run" class="run" type="submit"><span class="spin" hidden></span><svg class="run-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg><span class="txt">Run test</span></button>
       <div class="lib-save" id="lib-save-row">
         <button type="button" class="btn-ghost" id="lib-save">Save as strategy</button>
         <span class="help" id="lib-run-note"></span>
       </div>
       <div id="form-err" class="err" role="alert" hidden></div>
+    </div>
     </form>
     <details class="note">
       <summary>How the test works</summary>
@@ -296,7 +304,7 @@
 
   <section class="results" id="results" aria-live="polite">
     <div class="empty" id="empty">
-      <svg class="inf empty-mark" viewBox="0 0 120 60" aria-hidden="true" focusable="false"><path class="inf-halo" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-halo2" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-tube" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-core" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-trace" pathLength="100" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-trace inf-trace2" pathLength="100" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/></svg>
+      <svg class="inf empty-mark" viewBox="0 0 120 60" aria-hidden="true" focusable="false"><path class="inf-halo2" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-halo" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-tube" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-core" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/></svg>
       <h3>Test an idea on real history</h3>
       <p>Pick a market and type your entry, take profit and stop loss, or drop a chart screenshot and review what CHRONOS reads. Then run the test.</p>
       <ol class="empty-steps"><li>Upload a chart or pick a market</li><li>Review side and levels</li><li>Run test</li></ol>
@@ -314,10 +322,8 @@
     </div>
 
     <div class="skel" id="skel" hidden aria-hidden="true">
-      <div class="sk sk-verdict"></div>
-      <div class="sk-cards"><div class="sk"></div><div class="sk"></div><div class="sk"></div><div class="sk"></div></div>
-      <div class="sk sk-chart"></div>
-      <div class="sk-status"><span class="spin"></span><span id="skel-txt">Fetching candles and replaying your setup...</span><span class="sk-time" id="skel-time"></span></div>
+      <div class="loader"><svg viewBox="0 0 120 60" aria-hidden="true"><path class="lt" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="lc" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/></svg><i></i><i></i><i></i></div>
+      <div class="sk-status"><span id="skel-txt">Fetching candles and replaying your setup...</span><span class="sk-time" id="skel-time"></span></div>
       <ol class="sk-steps" id="skel-steps">
         <li>Load price history</li><li>Find past setups</li><li>Replay each trade candle by candle</li><li>Add fees and slippage, compute stats</li>
       </ol>
@@ -363,12 +369,69 @@
       <div class="warn" id="warn" hidden></div>
       <div class="sec-h"><span>Key numbers</span><span class="muted small" id="cards-note">after fees and slippage · theoretical underneath</span></div>
       <div class="cards" id="cards"></div>
-
+      <div class="rtabs" id="res-tabs" role="tablist" aria-label="Result sections">
+        <button type="button" role="tab" data-tab="overview" class="on" aria-selected="true">Overview</button>
+        <button type="button" role="tab" data-tab="perf" aria-selected="false">Performance</button>
+        <button type="button" role="tab" data-tab="trades" aria-selected="false">Trades <span class="cnt" id="tab-n-trades"></span></button>
+        <button type="button" role="tab" data-tab="analysis" aria-selected="false">Analysis</button>
+        <button type="button" role="tab" data-tab="markets" aria-selected="false">Other markets</button>
+      </div>
+      <div class="rpane on" data-pane="overview" role="tabpanel">
+      <div class="panel chart-panel">
+        <div class="panel-h"><span>Equity and drawdown</span><span class="muted small">cumulative R after costs, by exit time (WAT)</span>
+          <span class="chart-tools" data-for="chart"><button type="button" class="ctl" data-z="in" aria-label="Zoom in"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg></button><button type="button" class="ctl" data-z="out" aria-label="Zoom out"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h14"/></svg></button><button type="button" class="ctl txt" data-z="fit">Reset</button></span></div>
+        <div id="chart" class="lwc" role="img" aria-label="Equity curve and drawdown of this test's closed trades"></div>
+        <div class="legend"><span><i class="lg net"></i>After costs</span><span><i class="lg gross"></i>Theoretical</span><span><i class="lg dd"></i>Drawdown</span><span><i class="lg tp"></i>TP</span><span><i class="lg sl"></i>SL</span><span><i class="lg time"></i>Time exit</span></div>
+        <p class="chart-hint">Scroll or pinch to zoom, drag to pan. Each point is one closed trade from this test.</p>
+      </div>
       <div class="panel why-panel" id="why-panel">
         <div class="panel-h"><span>Why it worked or failed</span><span class="muted small">computed from this test's trades</span></div>
         <ul class="why-list" id="why-list"></ul>
       </div>
-
+      </div>
+      <div class="rpane" data-pane="perf" role="tabpanel">
+      <div class="chart-grid">
+        <div class="panel">
+          <div class="panel-h"><span>Wins vs losses</span><span class="muted small" id="out-note"></span></div>
+          <div class="outbar" id="outbar"></div>
+          <div class="outleg" id="outleg"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-h"><span>Monthly performance</span><span class="muted small">R after costs, by exit month (UTC)</span></div>
+          <div class="monthly" id="monthly"></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-h"><span>Trade distribution</span><span class="muted small">trades per result, after costs</span></div>
+        <canvas id="hist" height="220"></canvas>
+      </div>
+      <div class="panel" id="gvn-panel">
+        <div class="panel-h"><span>Theoretical vs after costs</span><span class="muted small" id="gvn-note"></span></div>
+        <div class="tbl-wrap gvn-wrap"><table class="gvn" id="gvn"><thead><tr><th>Metric</th><th class="r">Theoretical<br><span class="muted">no fees, no slippage</span></th><th class="r">After costs<br><span class="muted">fees + swap + slippage</span></th></tr></thead><tbody></tbody></table></div>
+        <div class="cost-line" id="cost-line"></div>
+      </div>
+      </div>
+      <div class="rpane" data-pane="trades" role="tabpanel">
+      <div class="panel trades-panel" id="trades-panel">
+        <div class="panel-h"><span>Trade records</span><span class="muted small" id="t-count"></span>
+          <span class="t-tools"><label class="chk mini"><input id="t-closed" type="checkbox"><span class="box" aria-hidden="true"></span><span>Closed only</span></label>
+          <button type="button" class="btn-ghost sm" id="t-csv">Download CSV</button></span></div>
+        <p class="muted small t-lead">Tap a column to sort. Times are WAT (UTC+1). Each row lists the candle source and exact prices, so any trade can be checked on a chart.</p>
+        <div class="tbl-wrap">
+          <table id="trades">
+            <thead><tr id="trades-head"></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="panel sim-panel" id="sim-panel" hidden>
+        <div class="panel-h"><span>Closest past moments</span><span class="muted small" id="sim-count"></span></div>
+        <p class="sim-lead">These are the windows whose price action was closest to your setup. Open them on your chart to judge the match. Similarity is a closeness score, not a forecast.</p>
+        <div class="sim-table" id="sim-table" role="table" aria-label="Closest past moments"></div>
+        <div class="sim-cards" id="sim-cards"></div>
+      </div>
+      </div>
+      <div class="rpane" data-pane="analysis" role="tabpanel">
       <div class="panel cond-panel" id="cond-panel" hidden>
         <div class="panel-h"><span>Market conditions</span><span class="muted small">each trade tagged at its signal, using only past candles</span></div>
         <p class="cond-head" id="cond-head"></p>
@@ -395,52 +458,6 @@
         </div>
         <details class="note"><summary>What these mean</summary><ul id="adv-def"></ul></details>
       </div>
-
-      <div class="panel chart-panel">
-        <div class="panel-h"><span>Equity curve</span><span class="muted small">cumulative R per closed trade</span></div>
-        <canvas id="chart" height="260"></canvas>
-        <div class="legend"><span><i class="lg net"></i>After costs</span><span><i class="lg gross"></i>Theoretical</span><span><i class="lg tp"></i>TP</span><span><i class="lg sl"></i>SL</span><span><i class="lg time"></i>Time exit</span></div>
-      </div>
-
-      <div class="chart-grid">
-        <div class="panel">
-          <div class="panel-h"><span>R distribution</span><span class="muted small">trades per result, after costs</span></div>
-          <canvas id="hist" height="200"></canvas>
-        </div>
-        <div class="panel">
-          <div class="panel-h"><span>Outcomes</span><span class="muted small" id="out-note"></span></div>
-          <div class="outbar" id="outbar"></div>
-          <div class="outleg" id="outleg"></div>
-          <div class="panel-h sub-h"><span>By month</span><span class="muted small">R after costs, by exit month (UTC)</span></div>
-          <div class="monthly" id="monthly"></div>
-        </div>
-      </div>
-
-      <div class="panel" id="gvn-panel">
-        <div class="panel-h"><span>Theoretical vs after costs</span><span class="muted small" id="gvn-note"></span></div>
-        <div class="tbl-wrap gvn-wrap"><table class="gvn" id="gvn"><thead><tr><th>Metric</th><th class="r">Theoretical<br><span class="muted">no fees, no slippage</span></th><th class="r">After costs<br><span class="muted">fees + swap + slippage</span></th></tr></thead><tbody></tbody></table></div>
-        <div class="cost-line" id="cost-line"></div>
-      </div>
-
-      <div class="panel sim-panel" id="sim-panel" hidden>
-        <div class="panel-h"><span>Closest past moments</span><span class="muted small" id="sim-count"></span></div>
-        <p class="sim-lead">These are the windows whose price action was closest to your setup. Open them on your chart to judge the match. Similarity is a closeness score, not a forecast.</p>
-        <div class="sim-table" id="sim-table" role="table" aria-label="Closest past moments"></div>
-        <div class="sim-cards" id="sim-cards"></div>
-      </div>
-
-      <div class="panel trades-panel" id="trades-panel">
-        <div class="panel-h"><span>Trade records</span><span class="muted small" id="t-count"></span>
-          <span class="t-tools"><label class="chk mini"><input id="t-closed" type="checkbox"><span class="box" aria-hidden="true"></span><span>Closed only</span></label>
-          <button type="button" class="btn-ghost sm" id="t-csv">Download CSV</button></span></div>
-        <p class="muted small t-lead">Tap a column to sort. Times are WAT (UTC+1). Each row lists the candle source and exact prices, so any trade can be checked on a chart.</p>
-        <div class="tbl-wrap">
-          <table id="trades">
-            <thead><tr id="trades-head"></tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
       <div class="panel ins-panel" id="ins" hidden>
         <div class="panel-h"><span class="ph-ico" aria-hidden="true">
           <svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/></svg></span>
@@ -456,7 +473,8 @@
         <ul class="ins-fixes" id="ins-fixes"></ul>
         <div class="ins-disc" id="ins-disc"></div>
       </div>
-
+      </div>
+      <div class="rpane" data-pane="markets" role="tabpanel">
       <div class="panel cmp-panel" id="cmp">
         <div class="panel-h">
           <span>Test on other pairs</span>
@@ -500,7 +518,7 @@
           <p class="scan-disc">Not advice. Past results don't guarantee future results. A high score means the path looks similar, not that the trade will work.</p>
         </div>
       </div>
-
+      </div>
       <div class="meta" id="meta"></div>
     </div>
 
@@ -570,7 +588,6 @@
     </div>
   </div>
 </section>
-
 <div class="rp-modal" id="rp" hidden role="dialog" aria-modal="true" aria-labelledby="rp-title">
   <div class="rp-box">
     <div class="rp-head">
@@ -578,7 +595,7 @@
       <button type="button" class="btn-ghost sm" id="rp-close" aria-label="Close replay">Close</button>
     </div>
     <div class="rp-status" id="rp-status" aria-live="polite"></div>
-    <div class="rp-chart"><canvas id="rp-cv" height="320"></canvas><div class="rp-load" id="rp-load" hidden><span class="spin"></span><span>Loading the stored candles...</span></div></div>
+    <div class="rp-chart"><span class="chart-tools" data-for="rp-cv"><button type="button" class="ctl" data-z="in" aria-label="Zoom in"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg></button><button type="button" class="ctl" data-z="out" aria-label="Zoom out"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h14"/></svg></button><button type="button" class="ctl txt" data-z="fit">Reset</button></span><div id="rp-cv" class="lwc" role="img" aria-label="Replay candles"></div><div class="rp-load" id="rp-load" hidden><span class="spin"></span><span>Loading the stored candles...</span></div></div>
     <div class="rp-ctrl" role="group" aria-label="Replay controls">
       <button type="button" class="btn-ghost sm" id="rp-start">Signal</button>
       <button type="button" class="btn-ghost sm" id="rp-back" aria-label="Step back one candle">Back</button>
@@ -592,15 +609,16 @@
     <p class="muted small" id="rp-src"></p>
   </div>
 </div>
-
 <footer class="foot">
   <div class="foot-in">
-    <div class="foot-brand"><svg class="inf foot-mark" viewBox="0 0 120 60" aria-hidden="true" focusable="false"><path class="inf-halo" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-halo2" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-tube" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-core" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-trace" pathLength="100" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-trace inf-trace2" pathLength="100" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/></svg><span>CHRONOS</span></div>
+    <div class="foot-brand"><svg class="inf foot-mark" viewBox="0 0 120 60" aria-hidden="true" focusable="false"><path class="inf-halo2" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-halo" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-tube" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-core" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/></svg><span>CHRONOS</span></div>
     <p><b>Past results only.</b> Every number here comes from replaying past MFP candles. It is not a prediction, not financial advice, and no guarantee of profit.</p>
     <p class="muted">A similarity score measures closeness of recent price action, not future performance. Pattern mode is an optional rule-based approximation of supply or demand areas a trader might draw by eye.</p>
+    <p class="foot-attr">Charts: <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView Lightweight Charts™</a>, Copyright (c) 2026 TradingView, Inc., Apache License 2.0. Fonts: Geist and Geist Mono (SIL OFL 1.1).</p>
   </div>
 </footer>
 <div class="toasts" id="toasts" aria-live="assertive"></div>
+<script src="/static/vendor/lightweight-charts.standalone.production.js"></script>
 <script src="/static/account.js"></script>
 <script src="/static/app.js"></script>
 <div class="rp-modal le-modal" id="le" hidden role="dialog" aria-modal="true" aria-labelledby="le-title">
@@ -638,8 +656,8 @@
     <div class="le-btns"><button type="submit" class="run" id="le-save">Save strategy</button><button type="button" class="btn-ghost" id="le-cancel">Cancel</button></div>
   </form>
 </div>
-
 <script src="/static/p2.js"></script>
 <script src="/static/p3.js"></script>
+<script src="/static/ui.js"></script>
 </body>
 </html>

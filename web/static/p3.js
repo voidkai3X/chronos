@@ -414,23 +414,23 @@ $("lib-runs").addEventListener("click", async e => {
 function drawTrend(runs) {
   const cv = $("lib-trend"), H = 170, [c, W] = C.sizeCanvas(cv, H);
   const L = 40, R = 44, T = 12, B = 22, w = W - L - R, h = H - T - B;
-  c.font = "11px ui-monospace,Menlo,monospace";
-  if (runs.length < 2) { c.fillStyle = "#8fa596"; c.fillText("The trend appears after a second run.", L, H / 2); return; }
+  c.font = "11px 'Geist Mono',ui-monospace,Menlo,monospace";
+  if (runs.length < 2) { c.fillStyle = "#78857d"; c.fillText("The trend appears after a second run.", L, H / 2); return; }
   const n = runs.length, X = i => L + (n === 1 ? w / 2 : i * w / (n - 1));
   const sc = runs.map(r => r.metrics.edge_score ?? 0), ex = runs.map(r => r.metrics.expectancy_r ?? 0);
   const Ys = v => T + (100 - v) / 100 * h;
   let lo = Math.min(0, ...ex), hi = Math.max(0, ...ex); if (hi - lo < 0.1) { hi += 0.05; lo -= 0.05; }
   const Ye = v => T + (hi - v) / (hi - lo) * h;
   c.strokeStyle = "rgba(95,214,58,.08)"; c.lineWidth = 1;
-  [0, 20, 45, 70, 100].forEach(v => { c.beginPath(); c.moveTo(L, Ys(v)); c.lineTo(W - R, Ys(v)); c.stroke(); c.fillStyle = "#8fa596"; c.fillText(String(v), 6, Ys(v) + 4); });
-  c.fillStyle = "#8fa596"; c.fillText(sgnR(hi), W - R + 4, Ye(hi) + 10); c.fillText(sgnR(lo), W - R + 4, Ye(lo) - 2);
+  [0, 20, 45, 70, 100].forEach(v => { c.beginPath(); c.moveTo(L, Ys(v)); c.lineTo(W - R, Ys(v)); c.stroke(); c.fillStyle = "#78857d"; c.fillText(String(v), 6, Ys(v) + 4); });
+  c.fillStyle = "#78857d"; c.fillText(sgnR(hi), W - R + 4, Ye(hi) + 10); c.fillText(sgnR(lo), W - R + 4, Ye(lo) - 2);
   c.strokeStyle = "rgba(191,211,196,.25)"; c.setLineDash([2, 3]); c.beginPath(); c.moveTo(L, Ye(0)); c.lineTo(W - R, Ye(0)); c.stroke();
   c.strokeStyle = "rgba(191,211,196,.6)"; c.setLineDash([6, 4]); c.lineWidth = 1.5; c.beginPath();
   ex.forEach((v, i) => i ? c.lineTo(X(i), Ye(v)) : c.moveTo(X(i), Ye(v))); c.stroke(); c.setLineDash([]);
-  c.strokeStyle = "#5fd63a"; c.lineWidth = 2; c.beginPath();
+  c.strokeStyle = "#6dff3c"; c.lineWidth = 2; c.beginPath();
   sc.forEach((v, i) => i ? c.lineTo(X(i), Ys(v)) : c.moveTo(X(i), Ys(v))); c.stroke();
-  c.fillStyle = "#5fd63a"; sc.forEach((v, i) => { c.beginPath(); c.arc(X(i), Ys(v), 2.5, 0, 7); c.fill(); });
-  c.fillStyle = "#8fa596";
+  c.fillStyle = "#6dff3c"; sc.forEach((v, i) => { c.beginPath(); c.arc(X(i), Ys(v), 2.5, 0, 7); c.fill(); });
+  c.fillStyle = "#78857d";
   const d0 = wat(Date.parse(runs[0].created_at)).slice(0, 6), d1 = wat(Date.parse(runs[n - 1].created_at)).slice(0, 6);
   c.fillText(d0, L, H - 6); c.fillText(d1, W - R - c.measureText(d1).width, H - 6);
 }

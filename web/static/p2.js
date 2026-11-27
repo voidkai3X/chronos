@@ -170,7 +170,7 @@ async function runStrategies() {
 }
 
 // ---------------------------------------------------------------- strategy comparison results
-const SC_COLORS = ["#5fd63a", "#9fe7b5", "#e3c35a", "#7fb8ff", "#ff8a7a", "#c9d6cc"];
+const SC_COLORS = ["#6dff3c", "#eaf0eb", "#d6b25f", "#3fbf86", "#8a968e", "#c3e88f"];
 const SC_DASH = [[], [6, 4], [], [2, 3], [8, 3, 2, 3], [4, 4]];
 let scSort = { key: null, dir: -1 };
 const SC_COLS = [
@@ -219,7 +219,7 @@ function drawScChart() {
   const cv = $("sc-chart"), H = 280, [c, W] = sizeCanvas(cv, H);
   const series = j.rows.map((r, i) => ({ r, i })).filter(x => !x.r.error && x.r.equity && x.r.equity.length);
   const L = 50, R = 12, T = 12, B = 26, w = W - L - R, h = H - T - B;
-  c.font = "11px ui-monospace,Menlo,monospace"; c.fillStyle = "#8fa596";
+  c.font = "11px 'Geist Mono',ui-monospace,Menlo,monospace"; c.fillStyle = "#78857d";
   if (!series.length) { c.fillText("No closed trades to chart.", L, H / 2); $("sc-legend").innerHTML = ""; return; }
   const t0 = j.conditions.from_ms, t1 = j.conditions.to_ms;
   let lo = 0, hi = 0; series.forEach(s => s.r.equity.forEach(p => { lo = Math.min(lo, p[1]); hi = Math.max(hi, p[1]); }));
@@ -227,15 +227,15 @@ function drawScChart() {
   const pad = (hi - lo) * .08; lo -= pad; hi += pad;
   const X = t => L + (t - t0) / Math.max(1, t1 - t0) * w, Y = v => T + (hi - v) / (hi - lo) * h;
   const st = niceStep((hi - lo) / 5);
-  c.strokeStyle = "#0d2414"; c.lineWidth = 1;
+  c.strokeStyle = "rgba(170,255,170,.06)"; c.lineWidth = 1;
   for (let v = Math.ceil(lo / st) * st; v <= hi; v += st) { c.beginPath(); c.moveTo(L, Y(v)); c.lineTo(W - R, Y(v)); c.stroke(); c.fillText((v > 0 ? "+" : "") + v.toFixed(st < 1 ? 1 : 0) + "R", 4, Y(v) + 4); }
-  c.strokeStyle = "#2a5532"; c.setLineDash([4, 4]); c.beginPath(); c.moveTo(L, Y(0)); c.lineTo(W - R, Y(0)); c.stroke(); c.setLineDash([]);
+  c.strokeStyle = "rgba(170,255,170,.2)"; c.setLineDash([4, 4]); c.beginPath(); c.moveTo(L, Y(0)); c.lineTo(W - R, Y(0)); c.stroke(); c.setLineDash([]);
   series.forEach(({ r, i }) => {
     c.beginPath(); c.moveTo(X(t0), Y(0));
     r.equity.forEach(p => { c.lineTo(X(p[0]), Y(p[1])); });
     c.strokeStyle = SC_COLORS[i % 6]; c.lineWidth = 2; c.setLineDash(SC_DASH[i % 6]); c.stroke(); c.setLineDash([]);
   });
-  c.fillStyle = "#8fa596"; c.fillText(wat(t0).split(" ").slice(0, 2).join(" "), L, H - 6);
+  c.fillStyle = "#78857d"; c.fillText(wat(t0).split(" ").slice(0, 2).join(" "), L, H - 6);
   const e = wat(t1).split(" ").slice(0, 2).join(" "); c.fillText(e, W - R - c.measureText(e).width, H - 6);
   $("sc-legend").innerHTML = series.map(({ r, i }) => `<span><i class="lg" style="background:${SC_COLORS[i % 6]}"></i>${esc(r.name)} ${sgnR(r.total_r)}</span>`).join("");
 }
@@ -314,42 +314,48 @@ function statusAt(k) {
 }
 function drawReplay() {
   if (!RP.bars.length) return;
-  const cv = $("rp-cv"), H = window.matchMedia("(max-width: 640px)").matches ? 260 : 320, [c, W] = sizeCanvas(cv, H);
+  const k = RP.head;
+  if (!(window.CHRONOS_UI && window.CHRONOS_UI.replay && window.CHRONOS_UI.replay($("rp-cv"), RP))) drawReplayCanvas();
+  $("rp-status").textContent = statusAt(k);
+  $("rp-scrub").value = k;
+  $("rp-play").textContent = RP.timer ? "Pause" : (k >= RP.bars.length - 1 ? "Replay" : "Play");
+}
+function drawReplayCanvas() { // fallback when the chart library is unavailable
+  let cv = $("rp-cv");
+  if (cv.tagName !== "CANVAS") cv = cv.querySelector("canvas") || cv.appendChild(document.createElement("canvas"));
+  const H = window.matchMedia("(max-width: 640px)").matches ? 260 : 320, [c, W] = sizeCanvas(cv, H);
   const t = RP.trade, k = RP.head, VIEW = Math.max(40, Math.min(160, Math.floor(W / 6)));
   const from = Math.max(0, Math.min(k - VIEW + 12, RP.bars.length - VIEW)), to = Math.min(RP.bars.length - 1, Math.max(k, from + VIEW - 1));
   const vis = RP.bars.slice(from, k + 1);
-  c.font = "11px ui-monospace,Menlo,monospace";
+  c.font = "11px 'Geist Mono',ui-monospace,Menlo,monospace";
   const L = 8, R = Math.ceil(Math.max(...["TP " + px(t.tp), "SL " + px(t.sl), "Entry"].map(x => c.measureText(x).width))) + 10, T = 10, B = 22, w = W - L - R, h = H - T - B, n = to - from + 1, bw = w / n;
   let lo = Math.min(t.sl, t.tp, t.entry), hi = Math.max(t.sl, t.tp, t.entry);
   vis.forEach(b => { lo = Math.min(lo, b[3]); hi = Math.max(hi, b[2]); });
   const pad = (hi - lo) * .06 || hi * .001; lo -= pad; hi += pad;
   const X = i => L + (i - from) * bw + bw / 2, Y = v => T + (hi - v) / (hi - lo) * h;
-  c.font = "11px ui-monospace,Menlo,monospace";
+  c.font = "11px 'Geist Mono',ui-monospace,Menlo,monospace";
   const { signal, fill, exit } = RP.idx;
   // trade span shading
-  if (fill >= 0 && k >= fill) { const x0 = X(fill) - bw / 2, x1 = X(Math.min(k, exit >= 0 ? exit : k)) + bw / 2; c.fillStyle = "rgba(95,214,58,.06)"; c.fillRect(x0, T, Math.max(0, x1 - x0), h); }
+  if (fill >= 0 && k >= fill) { const x0 = X(fill) - bw / 2, x1 = X(Math.min(k, exit >= 0 ? exit : k)) + bw / 2; c.fillStyle = "rgba(109,255,60,.05)"; c.fillRect(x0, T, Math.max(0, x1 - x0), h); }
   // levels
   const lvl = (v, col, lbl, dash) => { c.strokeStyle = col; c.setLineDash(dash); c.lineWidth = 1.2; c.beginPath(); c.moveTo(L, Y(v)); c.lineTo(W - R, Y(v)); c.stroke(); c.setLineDash([]);
     c.fillStyle = col; c.fillText(lbl, W - R + 4, Y(v) + 4); };
-  lvl(t.tp, "#3ddc84", "TP " + px(t.tp), [6, 4]); lvl(t.sl, "#ff4d5e", "SL " + px(t.sl), [6, 4]); lvl(t.entry, "#c9d6cc", "Entry", [2, 3]);
+  lvl(t.tp, "#4ade80", "TP " + px(t.tp), [6, 4]); lvl(t.sl, "#e0646e", "SL " + px(t.sl), [6, 4]); lvl(t.entry, "#a9b4ac", "Entry", [2, 3]);
   // signal line
   if (signal >= from && signal <= k) { c.strokeStyle = "rgba(201,214,204,.5)"; c.setLineDash([3, 3]); c.beginPath(); c.moveTo(X(signal) - bw / 2, T); c.lineTo(X(signal) - bw / 2, T + h); c.stroke(); c.setLineDash([]);
-    c.fillStyle = "#8fa596"; c.fillText("signal", X(signal) - bw / 2 + 3, T + 10); }
+    c.fillStyle = "#78857d"; c.fillText("signal", X(signal) - bw / 2 + 3, T + 10); }
   // candles up to the play head only
   vis.forEach((b, j) => { const i = from + j, x = X(i), up = b[4] >= b[1];
-    c.strokeStyle = up ? "#4cc22c" : "#e0505e"; c.fillStyle = up ? "#4cc22c" : "#e0505e"; c.lineWidth = 1;
+    c.strokeStyle = up ? "#4ade80" : "#e0646e"; c.fillStyle = up ? "#4ade80" : "#e0646e"; c.lineWidth = 1;
     c.beginPath(); c.moveTo(x, Y(b[2])); c.lineTo(x, Y(b[3])); c.stroke();
     const yo = Y(b[1]), yc = Y(b[4]); c.fillRect(x - Math.max(1, bw * .35), Math.min(yo, yc), Math.max(2, bw * .7), Math.max(1, Math.abs(yc - yo))); });
   // fill and exit markers
   const sgn = RP.o.setup.side === "short" ? -1 : 1;
-  if (fill >= 0 && k >= fill && fill >= from) { const x = X(fill), y = Y(t.fill_px_theoretical ?? t.fill_px); c.fillStyle = "#e8f5ea";
+  if (fill >= 0 && k >= fill && fill >= from) { const x = X(fill), y = Y(t.fill_px_theoretical ?? t.fill_px); c.fillStyle = "#eaf0eb";
     c.beginPath(); c.moveTo(x, y + sgn * 0); c.lineTo(x - 6, y + sgn * 10); c.lineTo(x + 6, y + sgn * 10); c.closePath(); c.fill(); }
-  if (exit >= 0 && k >= exit && exit >= from) { const x = X(exit), y = Y(t.exit_px_theoretical ?? t.exit_px); c.fillStyle = t.status === "tp" ? "#3ddc84" : t.status === "sl" ? "#ff4d5e" : "#e3c35a";
-    c.beginPath(); c.arc(x, y, 5, 0, 7); c.fill(); c.strokeStyle = "#010a03"; c.lineWidth = 1.5; c.stroke(); }
-  c.fillStyle = "#8fa596"; const tl = wat(RP.bars[k][0]) + " WAT"; c.fillText(tl, L, H - 6);
-  $("rp-status").textContent = statusAt(k);
-  $("rp-scrub").value = k;
-  $("rp-play").textContent = RP.timer ? "Pause" : (k >= RP.bars.length - 1 ? "Replay" : "Play");
+  if (exit >= 0 && k >= exit && exit >= from) { const x = X(exit), y = Y(t.exit_px_theoretical ?? t.exit_px); c.fillStyle = t.status === "tp" ? "#4ade80" : t.status === "sl" ? "#e0646e" : "#d6b25f";
+    c.beginPath(); c.arc(x, y, 5, 0, 7); c.fill(); c.strokeStyle = "#050c08"; c.lineWidth = 1.5; c.stroke(); }
+  c.fillStyle = "#78857d"; const tl = wat(RP.bars[k][0]) + " WAT"; c.fillText(tl, L, H - 6);
 }
 function stopPlay() { clearInterval(RP.timer); RP.timer = null; if ($("rp-play")) $("rp-play").textContent = "Play"; }
 function play() {

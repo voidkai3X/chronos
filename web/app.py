@@ -469,7 +469,8 @@ def _html_page(name):
     with open(path, encoding="utf-8") as f:
         html = f.read()
     ver = _ASSET_V
-    for asset in ("style.css", "app.js", "p2.js", "p3.js", "account.js", "auth.js"):
+    for asset in ("style.css", "app.js", "p2.js", "p3.js", "account.js", "auth.js", "ui.js",
+                  "vendor/lightweight-charts.standalone.production.js"):
         attr = "href" if asset.endswith(".css") else "src"
         html = html.replace(f'{attr}="/static/{asset}"', f'{attr}="/static/{asset}?v={ver}"', 1)
     resp = app.response_class(html, mimetype="text/html; charset=utf-8")

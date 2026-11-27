@@ -11,6 +11,7 @@ const base = (process.argv[2] || "http://127.0.0.1:8093").replace(/\/$/, "");
 const out = process.argv[3] || "web/screenshots";
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
 const ok = m => console.log("ok ", m);
+const tab = (page, name) => page.click(`#res-tabs [data-tab="${name}"]`); // v2 results are organised in tabs
 
 async function fillSetup(page) {
   await page.fill("#market", "BTC");
@@ -52,6 +53,7 @@ async function runAndCheck(page) {
     await fillSetup(page);
     await runAndCheck(page);
     // sort by net R descending
+    await tab(page, "trades");
     await page.click('#trades-head th[data-k="r_net"]'); await page.click('#trades-head th[data-k="r_net"]');
     const rs = await page.$$eval("#trades tbody tr td:nth-child(12)", e => e.map(x => parseFloat(x.textContent)).filter(v => !isNaN(v)));
     for (let i = 1; i < rs.length; i++) assert(rs[i - 1] >= rs[i], "sorted desc");

@@ -439,7 +439,7 @@ function badgeFor(v) {
   if (v.startsWith("edge")) return ["edge", "Edge on this sample"];
   return ["few", v];
 }
-function card(k, v, d, cls) { return `<div class="card"><div class="k">${k}</div><div class="v ${cls || ""}">${v}</div>${d ? `<div class="d">${d}</div>` : ""}</div>`; }
+function card(k, v, d, cls, kpi) { return `<div class="card${kpi ? " kpi" : ""}"><div class="k">${k}</div><div class="v ${cls || ""}">${v}</div>${d ? `<div class="d">${d}</div>` : ""}</div>`; }
 function render(o) {
   lastResult = o;
   const g = o.setup, s = o.result, m = o.market, p = o.params;
@@ -487,34 +487,40 @@ function render(o) {
     const pfTxt = b => b.profit_factor != null ? Number(b.profit_factor).toFixed(2) : (b.profit_factor_infinite ? "no losses" : "n/a");
     const hrs = h => h == null ? "-" : h >= 48 ? (h / 24).toFixed(1) + "d" : Number(h).toFixed(1) + "h";
     const rr = b => b.avg_rr_achieved == null ? "n/a" : "1:" + Number(b.avg_rr_achieved).toFixed(2);
-    $("cards").innerHTML = [
+    // primary KPIs first; every other number stays one tap away under "More numbers"
+    const kpis = [
+      card("Win rate", pct(n.win_rate), `break-even ${pct(s.breakeven_win_rate)} · theoretical ${pct(gr.win_rate)}`, n.win_rate == null ? "" : (n.win_rate > s.breakeven_win_rate ? "pos" : "neg"), 1),
+      card("Trades executed", st.trades_executed, `of ${st.orders_placed} orders · unfilled ${st.unfilled}${st.open_at_end ? ` · still open ${st.open_at_end}` : ""}`, "", 1),
+      card("Net P/L", sgnR(n.total_r), `${sgnPct(n.total_pct)} at ${st.risk_pct_per_trade}% risk per trade · theoretical ${sgnR(gr.total_r)}`, cl(n.total_r), 1),
+      card("Profit factor", pfTxt(n), `theoretical ${pfTxt(gr)} · above 1 = made money`, n.profit_factor == null ? "" : (n.profit_factor > 1 ? "pos" : "neg"), 1),
+      card("Max drawdown", (n.max_drawdown_r || 0).toFixed(2) + "R", `${sgnPct(n.max_drawdown_pct)} at ${st.risk_pct_per_trade}% risk · theoretical ${(gr.max_drawdown_r || 0).toFixed(2)}R`, n.max_drawdown_r < 0 ? "neg" : "", 1),
+      card("Expectancy", sgnR(n.expectancy_r), `average result per trade · theoretical ${sgnR(gr.expectancy_r)}`, cl(n.expectancy_r), 1),
+      card("Avg R:R achieved", rr(n), `avg win ÷ avg loss · theoretical ${rr(gr)}`, "", 1),
+      card("Wins / losses", `${n.wins} / ${n.losses}`, `${st.closed} closed${n.flat ? ` · ${n.flat} flat` : ""} · theoretical ${gr.wins} / ${gr.losses}`, "", 1),
+    ];
+    const more = [
       card("Setups identified", st.setups_identified, esc(st.setups_basis)),
-      card("Trades executed", st.trades_executed, `of ${st.orders_placed} orders · unfilled ${st.unfilled}${st.open_at_end ? ` · still open ${st.open_at_end}` : ""}`),
-      card("Wins / losses", `${n.wins} / ${n.losses}`, `${st.closed} closed${n.flat ? ` · ${n.flat} flat` : ""} · theoretical ${gr.wins} / ${gr.losses}`),
-      card("Win rate", pct(n.win_rate), `break-even ${pct(s.breakeven_win_rate)} · theoretical ${pct(gr.win_rate)}`, n.win_rate == null ? "" : (n.win_rate > s.breakeven_win_rate ? "pos" : "neg")),
-      card("Net P/L", sgnR(n.total_r), `${sgnPct(n.total_pct)} at ${st.risk_pct_per_trade}% risk per trade · theoretical ${sgnR(gr.total_r)}`, cl(n.total_r)),
-      card("Profit factor", pfTxt(n), `theoretical ${pfTxt(gr)} · above 1 = made money`, n.profit_factor == null ? "" : (n.profit_factor > 1 ? "pos" : "neg")),
-      card("Max drawdown", (n.max_drawdown_r || 0).toFixed(2) + "R", `${sgnPct(n.max_drawdown_pct)} at ${st.risk_pct_per_trade}% risk · theoretical ${(gr.max_drawdown_r || 0).toFixed(2)}R`, n.max_drawdown_r < 0 ? "neg" : ""),
-      card("Expectancy", sgnR(n.expectancy_r), `average result per trade · theoretical ${sgnR(gr.expectancy_r)}`, cl(n.expectancy_r)),
-      card("Avg R:R achieved", rr(n), `avg win ÷ avg loss · theoretical ${rr(gr)}`),
       card("Avg win / avg loss", `${sgnR(n.avg_win_r)} / ${sgnR(n.avg_loss_r)}`, `theoretical ${sgnR(gr.avg_win_r)} / ${sgnR(gr.avg_loss_r)}`),
       card("Longest streaks", `${n.longest_win_streak}W / ${n.longest_loss_streak}L`, "wins and losses in a row"),
       card("Avg time in trade", hrs(st.duration_h.avg), `winners ${hrs(st.duration_h.avg_win)} · losers ${hrs(st.duration_h.avg_loss)}`),
       ...zcard, ...scard,
       card("Stop-sweep check", `${s.sl_then_tp} / ${s.sl}`, `stop-outs that still reached TP within ${p.sweep_window}`),
-    ].join("");
+    ];
+    const wasOpen = !!document.querySelector("#cards details.more-stats[open]");
+    $("cards").innerHTML = `<div class="kpis">${kpis.join("")}</div>` +
+      `<details class="more-stats"${wasOpen ? " open" : ""}><summary>More numbers <span class="muted">${more.length} more from this test</span></summary><div class="kpis2">${more.join("")}</div></details>`;
     renderGvn(st, o);
     renderWhy(st.why || []);
     renderOutcomes(st);
     renderMonthly(st.monthly || []);
   } else {
-    $("cards").innerHTML = [...zcard, ...scard,
+    $("cards").innerHTML = '<div class="kpis">' + [...zcard, ...scard,
       card("Orders", s.placed, `filled ${s.fills} · unfilled ${s.unfilled}`),
       card("Closed trades", s.closed, `TP ${s.tp} · SL ${s.sl}`),
       card("Win rate", pct(s.win_rate), `break-even ${pct(s.breakeven_win_rate)}`),
       card("Avg R per trade", sgnR(s.avg_r_net), `gross ${sgnR(s.avg_r_gross)}`),
       card("Total R", sgnR(s.total_r_net), ""),
-      card("Max drawdown", (s.max_drawdown_r || 0).toFixed(2) + "R", "")].join("");
+      card("Max drawdown", (s.max_drawdown_r || 0).toFixed(2) + "R", "")].join("") + "</div>";
   }
   ["gvn-panel", "why-panel"].forEach(id => $(id).hidden = !st);
   renderDQ(o.data_quality);
@@ -729,47 +735,51 @@ function sizeCanvas(cv, H) {
   return [c, W];
 }
 function drawChart(o) {
-  const cv = $("chart"), H = 260, [c, W] = sizeCanvas(cv, H);
+  // TradingView Lightweight Charts (zoom / pan) when available; the plain canvas below is the fallback
+  if (window.CHRONOS_UI && window.CHRONOS_UI.equity && window.CHRONOS_UI.equity($("chart"), o)) return;
+  let cv = $("chart");
+  if (cv.tagName !== "CANVAS") cv = cv.querySelector("canvas") || cv.appendChild(document.createElement("canvas"));
+  const H = 260, [c, W] = sizeCanvas(cv, H);
   const eqs = (o.stats && o.stats.equity) || [];
   const pts = [{ x: 0, n: 0, g: 0 }].concat(eqs.map((e, i) => ({ x: i + 1, n: e.n, g: e.g, s: e.s, t: e.t })));
   const L = 50, R = 14, T = 12, B = 28, w = W - L - R, h = H - T - B;
-  c.font = "11px ui-monospace,Menlo,monospace"; c.fillStyle = "#8fa596";
+  c.font = "11px 'Geist Mono',ui-monospace,Menlo,monospace"; c.fillStyle = "#78857d";
   if (eqs.length === 0) { c.fillText("No closed trades to chart.", L, H / 2); return; }
   let lo = Math.min(0, ...pts.map(p => Math.min(p.n, p.g))), hi = Math.max(0, ...pts.map(p => Math.max(p.n, p.g)));
   if (hi - lo < 1) { hi += .5; lo -= .5; }
   const padY = (hi - lo) * .08; lo -= padY; hi += padY;
   const X = x => L + (x / Math.max(1, pts.length - 1)) * w, Y = y => T + (hi - y) / (hi - lo) * h;
   const stepR = niceStep((hi - lo) / 5);
-  c.strokeStyle = "#0d2414"; c.lineWidth = 1;
+  c.strokeStyle = "rgba(170,255,170,.06)"; c.lineWidth = 1;
   for (let v = Math.ceil(lo / stepR) * stepR; v <= hi; v += stepR) {
     c.beginPath(); c.moveTo(L, Y(v)); c.lineTo(W - R, Y(v)); c.stroke();
     c.fillText((v > 0 ? "+" : "") + v.toFixed(stepR < 1 ? 1 : 0) + "R", 4, Y(v) + 4);
   }
-  c.strokeStyle = "#2a5532"; c.setLineDash([4, 4]); c.beginPath(); c.moveTo(L, Y(0)); c.lineTo(W - R, Y(0)); c.stroke(); c.setLineDash([]);
+  c.strokeStyle = "rgba(170,255,170,.2)"; c.setLineDash([4, 4]); c.beginPath(); c.moveTo(L, Y(0)); c.lineTo(W - R, Y(0)); c.stroke(); c.setLineDash([]);
   // theoretical (gross): thin dashed, muted
   c.beginPath(); pts.forEach((p, i) => i ? c.lineTo(X(p.x), Y(p.g)) : c.moveTo(X(p.x), Y(p.g)));
-  c.strokeStyle = "rgba(191,211,196,.55)"; c.lineWidth = 1.4; c.setLineDash([5, 4]); c.stroke(); c.setLineDash([]);
+  c.strokeStyle = "rgba(169,180,172,.55)"; c.lineWidth = 1.4; c.setLineDash([5, 4]); c.stroke(); c.setLineDash([]);
   // after costs (net): filled area + solid line
-  const col = "#5fd63a";
+  const col = "#6dff3c";
   const top = Math.min(...pts.map(p => Y(p.n))), grd = c.createLinearGradient(0, top, 0, Y(0));
-  grd.addColorStop(0, "rgba(95,214,58,.16)"); grd.addColorStop(1, "rgba(95,214,58,0)");
+  grd.addColorStop(0, "rgba(109,255,60,.14)"); grd.addColorStop(1, "rgba(109,255,60,0)");
   c.beginPath(); pts.forEach((p, i) => i ? c.lineTo(X(p.x), Y(p.n)) : c.moveTo(X(p.x), Y(p.n)));
   c.lineTo(X(pts.length - 1), Y(0)); c.lineTo(X(0), Y(0)); c.closePath();
   c.save(); c.clip(); c.fillStyle = grd; c.fillRect(L, T, w, Math.max(0, Y(0) - T)); c.restore();
   c.beginPath(); pts.forEach((p, i) => i ? c.lineTo(X(p.x), Y(p.n)) : c.moveTo(X(p.x), Y(p.n)));
   c.strokeStyle = col; c.lineWidth = 2.2; c.lineJoin = "round"; c.stroke();
   if (pts.length <= 160) pts.slice(1).forEach(p => { c.beginPath(); c.arc(X(p.x), Y(p.n), 2.6, 0, 7);
-    c.fillStyle = p.s === "tp" ? "#3ddc84" : p.s === "sl" ? "#ff4d5e" : "#4cc22c"; c.fill(); });
-  c.fillStyle = "#8fa596";
+    c.fillStyle = p.s === "tp" ? "#4ade80" : p.s === "sl" ? "#e0646e" : "#d6b25f"; c.fill(); });
+  c.fillStyle = "#78857d";
   c.fillText("trade 1", L, H - 8);
   const endLbl = `trade ${eqs.length} · ${wat(eqs[eqs.length - 1].t)} WAT`;
   c.fillText(endLbl, W - R - c.measureText(endLbl).width, H - 8);
 }
 function drawHist(o) {
   const cv = $("hist"); if (!cv) return;
-  const H = 200, [c, W] = sizeCanvas(cv, H);
+  const H = 220, [c, W] = sizeCanvas(cv, H);
   const bins = (o.stats && o.stats.r_hist && o.stats.r_hist.net) || [];
-  c.font = "11px ui-monospace,Menlo,monospace"; c.fillStyle = "#8fa596";
+  c.font = "11px 'Geist Mono',ui-monospace,Menlo,monospace"; c.fillStyle = "#78857d";
   const tot = bins.reduce((a, b) => a + b.count, 0);
   if (!tot) { c.fillText("No closed trades.", 10, H / 2); return; }
   const L = 8, R = 8, T = 18, B = 34, w = W - L - R, h = H - T - B, n = bins.length, bw = w / n;
@@ -777,11 +787,11 @@ function drawHist(o) {
   bins.forEach((b, i) => {
     const bh = b.count / mx * h, x = L + i * bw + 3, y = T + h - bh;
     const neg = b.hi != null ? b.hi <= 0 : false;
-    c.fillStyle = neg ? "rgba(255,77,94,.75)" : "rgba(61,220,132,.8)";
+    c.fillStyle = neg ? "rgba(224,100,110,.7)" : "rgba(74,222,128,.75)";
     c.fillRect(x, y, Math.max(2, bw - 6), bh);
-    c.fillStyle = "#bfd3c4"; if (b.count) c.fillText(String(b.count), x + Math.max(0, (bw - 6) / 2 - 4), y - 4);
+    c.fillStyle = "#a9b4ac"; if (b.count) c.fillText(String(b.count), x + Math.max(0, (bw - 6) / 2 - 4), y - 4);
   });
-  c.fillStyle = "#8fa596";
+  c.fillStyle = "#78857d";
   bins.forEach((b, i) => {
     const lbl = b.lo == null ? `≤${b.hi}` : b.hi == null ? `>${b.lo}` : `${b.hi}`;
     const x = L + i * bw + bw / 2 - c.measureText(lbl).width / 2;
@@ -1108,7 +1118,7 @@ function applyQuery() {
   if (q.get("run") === "1") run();
 }
 window.CHRONOS = { $, fmt, px, pct, sgnR, sgnPct, wat, esc, durTxt, srcLabel, sizeCanvas, niceStep, toast, setBusy,
-  showErr, showResErr, levelError, card, EXIT_LBL, STATUS_LBL,
+  showErr, showResErr, levelError, card, EXIT_LBL, STATUS_LBL, drawHist, drawChart,
   getMarket: () => (chosen ? chosen.market_id : $("market").value.trim()),
   getSide: () => side, getResult: () => lastResult,
   // used by the strategy library (p3.js) to load a saved strategy into the form
