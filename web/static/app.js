@@ -210,10 +210,23 @@ async function readShot() {
     btn.querySelector(".txt").textContent = "Read screenshot";
   }
 }
+function applyShotEnabled(j) {
+  if (!j || typeof j.enabled !== "boolean") return;
+  if ($("shot-on")) $("shot-on").hidden = !j.enabled;
+  if ($("shot-off")) $("shot-off").hidden = !!j.enabled;
+}
+let shotStatusAt = 0;
+function refreshShotStatus(force) {
+  const now = Date.now();
+  if (!force && now - shotStatusAt < 3000) return;
+  shotStatusAt = now;
+  fetch("/api/screenshot").then(r => r.json()).then(applyShotEnabled).catch(() => {});
+}
 if ($("shot-panel")) {
-  fetch("/api/screenshot").then(r => r.json()).then(j => {
-    if (j && j.enabled === false) { $("shot-on").hidden = true; $("shot-off").hidden = false; }
-  }).catch(() => {});
+  refreshShotStatus(true);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshShotStatus(); });
+  window.addEventListener("focus", () => refreshShotStatus());
+  $("shot-panel").addEventListener("focusin", () => refreshShotStatus());
   $("shot-picks").addEventListener("click", e => {
     const b = e.target.closest("button[data-pattern]"); if (!b) return;
     const cur = ($("shot-pattern").value || "").trim();
@@ -221,8 +234,9 @@ if ($("shot-panel")) {
     syncPicks();
   });
   $("shot-pattern").addEventListener("input", () => { syncPicks(); setupPattern = $("shot-pattern").value.trim(); });
-  $("shot-drop").addEventListener("click", e => { if (e.target.closest("#shot-clear")) return; $("shot-file").click(); });
-  $("shot-drop").addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("shot-file").click(); } });
+  $("shot-drop").addEventListener("keydown", e => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("shot-file").focus(); $("shot-file").click(); }
+  });
   $("shot-file").addEventListener("change", () => { if ($("shot-file").files[0]) setShotFile($("shot-file").files[0]); });
   $("shot-clear").addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); clearShotFile(); });
   ["dragenter", "dragover"].forEach(ev => $("shot-drop").addEventListener(ev, e => { e.preventDefault(); $("shot-drop").classList.add("drag"); }));

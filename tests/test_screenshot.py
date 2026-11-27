@@ -190,6 +190,32 @@ class TestImageAndParse(unittest.TestCase):
         e = shot._map_openai_error(Weird("sk-secret-should-not-leak"))
         self.assertNotIn("sk-secret", e.message)
 
+    def test_quota_429_is_not_called_busy(self):
+        class Quota(Exception):
+            status_code = 429
+            body = {"error": {"type": "insufficient_quota", "code": "insufficient_quota",
+                              "message": "credit_balance_exhausted. You exceeded your current quota."}}
+        class Rate(Exception):
+            status_code = 429
+            body = {"error": {"type": "rate_limit_error", "code": "rate_limit_exceeded",
+                              "message": "Rate limit reached for gpt-4o-mini"}}
+        class Billing(Exception):
+            status_code = 429
+            code = "billing_not_active"
+        q = shot._map_openai_error(Quota("Error code: 429 - insufficient_quota"))
+        self.assertEqual(q.status, 503)
+        self.assertEqual(q.message, shot.QUOTA_MSG)
+        self.assertNotIn("busy", q.message)
+        r = shot._map_openai_error(Rate("Rate limit reached"))
+        self.assertEqual(r.status, 503)
+        self.assertIn("busy", r.message)
+        self.assertNotEqual(r.message, shot.QUOTA_MSG)
+        b = shot._map_openai_error(Billing("billing_not_active"))
+        self.assertEqual(b.message, shot.QUOTA_MSG)
+        # public message must not leak the raw SDK body
+        self.assertNotIn("insufficient_quota", q.message)
+        self.assertNotIn("credit_balance_exhausted", q.message)
+
 
 class TestScreenshotAPI(unittest.TestCase):
     def setUp(self):
@@ -322,6 +348,15 @@ class TestScreenshotAPI(unittest.TestCase):
         self.assertEqual(r.status_code, 503)
         self.assertIn("busy", r.get_json()["error"])
 
+    def test_quota_error_reaches_the_client(self):
+        self._enable()
+        def fake(_b, _m, pattern=""):
+            raise shot.ScreenshotError(shot.QUOTA_MSG, 503)
+        web.shot.call_vision = fake
+        r = self.post_img()
+        self.assertEqual(r.status_code, 503)
+        self.assertEqual(r.get_json()["error"], shot.QUOTA_MSG)
+
     def test_shares_heavy_budget_with_test(self):
         self._enable()
         web.shot.call_vision = lambda *_a, **_k: shot.parse_vision_payload({
@@ -354,6 +389,60 @@ class TestScreenshotAPI(unittest.TestCase):
         self.assertIn("daily screenshot", r.get_json()["error"])
         # a different IP is still allowed
         self.assertEqual(self.post_img(ip="198.51.100.42").status_code, 200)
+
+    def test_failed_openai_calls_do_not_count_against_daily_cap(self):
+        self._enable()
+        os.environ["RATE_SCREENSHOT_PER_DAY"] = "1"
+        ip = "198.51.100.44"
+        def fail(_b, _m, pattern=""):
+            raise shot.ScreenshotError(shot.QUOTA_MSG, 503)
+        def busy(_b, _m, pattern=""):
+            raise shot.ScreenshotError(shot.BUSY_MSG, 503)
+        def ok(_b, _m, pattern=""):
+            return shot.parse_vision_payload({
+                "symbol": "BTC", "side": "long", "timeframe": "1h",
+                "entry": 1, "take_profit": 2, "stop_loss": 0.5,
+                "confidence": conf(0.9), "notes": "",
+            })
+        web.shot.call_vision = fail
+        self.assertEqual(self.post_img(ip=ip).status_code, 503)
+        web.shot.call_vision = busy
+        self.assertEqual(self.post_img(ip=ip).status_code, 503)
+        self.assertFalse(web._shot_hits.get(ip))
+        web.shot.call_vision = ok
+        self.assertEqual(self.post_img(ip=ip).status_code, 200)
+        r = self.post_img(ip=ip)
+        self.assertEqual(r.status_code, 429)
+        self.assertIn("daily screenshot", r.get_json()["error"])
+
+    def test_unreadable_chart_does_count_against_daily_cap(self):
+        self._enable()
+        os.environ["RATE_SCREENSHOT_PER_DAY"] = "1"
+        ip = "198.51.100.45"
+        def unreadable(_b, _m, pattern=""):
+            return shot.parse_vision_payload({
+                "symbol": None, "side": None, "timeframe": None,
+                "entry": None, "take_profit": None, "stop_loss": None,
+                "confidence": conf(0), "notes": "not a chart",
+            })
+        web.shot.call_vision = unreadable
+        self.assertEqual(self.post_img(ip=ip).status_code, 422)
+        r = self.post_img(ip=ip)
+        self.assertEqual(r.status_code, 429)
+        self.assertIn("daily screenshot", r.get_json()["error"])
+
+    def test_index_is_not_cached_and_assets_are_versioned(self):
+        r = self.c.get("/")
+        self.assertEqual(r.status_code, 200)
+        cc = r.headers.get("Cache-Control", "")
+        self.assertIn("no-cache", cc)
+        html = r.get_data(as_text=True)
+        self.assertIn("/static/app.js?v=", html)
+        self.assertIn("/static/style.css?v=", html)
+        self.assertIn('id="shot-file"', html)
+        self.assertIn('for="shot-file"', html)
+        self.assertNotIn('id="shot-file" hidden', html)
+        self.assertNotIn("shot-file hidden", html)
 
     def test_daily_window_expires(self):
         self._enable()

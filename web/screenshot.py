@@ -363,14 +363,64 @@ def build_response(parsed, markets, pattern=""):
     )
 
 
+QUOTA_MSG = "Screenshot reading is paused: the OpenAI account behind this site is out of credit."
+BUSY_MSG = "The vision service is busy, try again in a minute"
+
+# Tokens that mean a billing/quota 429, not a request-rate 429.
+_QUOTA_MARKERS = (
+    "insufficient_quota",
+    "credit_balance_exhausted",
+    "billing_not_active",
+    "billing_hard_limit",
+    "quota_exceeded",
+    "exceeded your current quota",
+    "check your plan and billing",
+    "insufficient funds",
+    "out of credit",
+    "payment required",
+)
+
+
+def _openai_error_text(e):
+    """Join fields from an OpenAI SDK exception for classification only. Never returned to the client."""
+    bits = [type(e).__name__, str(getattr(e, "status_code", "") or "")]
+    for attr in ("code", "type", "message"):
+        v = getattr(e, attr, None)
+        if v:
+            bits.append(str(v))
+    body = getattr(e, "body", None)
+    if body is None:
+        resp = getattr(e, "response", None)
+        if resp is not None:
+            try:
+                body = resp.json()
+            except Exception:
+                body = getattr(resp, "text", None)
+    if isinstance(body, dict):
+        err = body.get("error") if isinstance(body.get("error"), dict) else body
+        for k in ("code", "type", "message"):
+            if err.get(k):
+                bits.append(str(err[k]))
+    elif body:
+        bits.append(str(body))
+    bits.append(str(e))
+    return " ".join(bits).lower()
+
+
+def is_quota_error(e):
+    return any(m in _openai_error_text(e) for m in _QUOTA_MARKERS)
+
+
 def _map_openai_error(e):
     """Public message only. Never include the exception text (it may contain request details)."""
     status = getattr(e, "status_code", None)
     name = type(e).__name__.lower()
+    if is_quota_error(e) or status == 402:
+        return ScreenshotError(QUOTA_MSG, 503)
     if status == 401 or "authentication" in name or "permission" in name:
         return ScreenshotError("Screenshot reading failed. Check the OpenAI API key on the server.", 502)
     if status == 429:
-        return ScreenshotError("The vision service is busy, try again in a minute", 503)
+        return ScreenshotError(BUSY_MSG, 503)
     if status in (500, 502, 503, 529):
         return ScreenshotError("The vision service is unavailable, try again in a minute", 503)
     if "timeout" in name or "timedout" in name:

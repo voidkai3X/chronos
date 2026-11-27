@@ -110,26 +110,36 @@ def rate_done_heavy():
             _heavy_inflight[ip] = n
 
 
-def rate_limit_screenshot_day():
-    """Per-IP daily cap on successful-enough screenshot reads (protects the OpenAI bill).
-
-    Call this after rate_limit_heavy() and after the image has been validated, just
-    before the vision request. Returns a 429 response or None.
-    """
-    ip = getattr(g, "heavy_ip", None) or client_ip()
-    now = time.time()
+def _screenshot_day_hits(ip, now=None):
+    now = time.time() if now is None else now
     window = 86400
-    limit = shot.daily_limit()
     with _rate_guard:
         stale = [k for k, ts in _shot_hits.items() if not ts or now - ts[-1] >= window]
         for k in stale:
             _shot_hits.pop(k, None)
-        hits = [t for t in _shot_hits.get(ip, []) if now - t < window]
-        if len(hits) >= limit:
-            return err("daily screenshot limit reached, try again tomorrow", 429)
+        return [t for t in _shot_hits.get(ip, []) if now - t < window]
+
+
+def rate_limit_screenshot_day():
+    """Return a 429 if this IP is at the daily cap. Does not record a use.
+
+    Failed OpenAI calls (quota, rate limit, timeouts) must not count. Record a
+    use with screenshot_day_record() only after a billed vision response.
+    """
+    ip = getattr(g, "heavy_ip", None) or client_ip()
+    if len(_screenshot_day_hits(ip)) >= shot.daily_limit():
+        return err("daily screenshot limit reached, try again tomorrow", 429)
+    return None
+
+
+def screenshot_day_record():
+    """Count one billed screenshot read (success or an unreadable-but-charged reply)."""
+    ip = getattr(g, "heavy_ip", None) or client_ip()
+    now = time.time()
+    with _rate_guard:
+        hits = [t for t in _shot_hits.get(ip, []) if now - t < 86400]
         hits.append(now)
         _shot_hits[ip] = hits
-    return None
 
 
 def pattern_from_body(d):
@@ -316,9 +326,43 @@ def run_engine(p, compare=False, timeout=None):
         _run_sem.release()
 
 
+def asset_version():
+    """Cache-bust query for app.js / style.css. Prefer the git commit, then file mtime."""
+    for key in ("ASSET_VERSION", "RENDER_GIT_COMMIT", "RENDER_GIT_COMMIT_SHA"):
+        v = (os.environ.get(key) or "").strip()
+        if v:
+            return v[:12]
+    try:
+        v = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"], cwd=ENGINE_DIR,
+            text=True, timeout=2, stderr=subprocess.DEVNULL,
+        ).strip()
+        if v:
+            return v[:12]
+    except Exception:
+        pass
+    try:
+        return str(int(os.path.getmtime(os.path.join(HERE, "static", "app.js"))))
+    except OSError:
+        return "1"
+
+
+_ASSET_V = asset_version()
+
+
 @app.get("/")
 def index():
-    return send_from_directory(os.path.join(HERE, "static"), "index.html")
+    path = os.path.join(HERE, "static", "index.html")
+    with open(path, encoding="utf-8") as f:
+        html = f.read()
+    ver = _ASSET_V
+    html = html.replace('href="/static/style.css"', f'href="/static/style.css?v={ver}"', 1)
+    html = html.replace('src="/static/app.js"', f'src="/static/app.js?v={ver}"', 1)
+    resp = app.response_class(html, mimetype="text/html; charset=utf-8")
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 
 @app.get("/api/health")
@@ -388,8 +432,10 @@ def screenshot_status():
 def read_screenshot():
     """Read a chart image with OpenAI vision and return fields for the user to review.
 
-    Never starts a backtest. Counts as a heavy request and against the daily cap
-    only once the image is valid and a vision call is about to be made.
+    Never starts a backtest. Counts as a heavy request once the image is valid.
+    The daily cap is charged only after a billed vision response (a successful
+    extract, or an unreadable-chart 422). Quota, rate-limit and transport
+    failures are not counted.
     """
     if not shot.enabled():
         return err("Screenshot reading isn't enabled yet", 503)
@@ -419,7 +465,10 @@ def read_screenshot():
         try:
             payload = shot.extract_setup(data, getattr(f, "filename", "") or "", pattern, markets)
         except shot.ScreenshotError as e:
+            if e.status == 422:
+                screenshot_day_record()
             return err(e.message, e.status)
+        screenshot_day_record()
         return jsonify(payload)
     finally:
         rate_done_heavy()

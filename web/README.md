@@ -29,7 +29,7 @@ Environment variables:
 - `OPENAI_VISION_MODEL`: vision model, default `gpt-4o-mini`
 - `RATE_SCREENSHOT_PER_DAY`: max screenshot reads per client IP per rolling 24 hours, default 20
 
-A public or shared link can otherwise pile up engine runs on the box. Heavy endpoints return 429 when either per-IP cap is hit, or when the global engine cap is busy. Screenshot reads also count toward a daily cap. The client IP is `request.remote_addr`, except that `CF-Connecting-IP` (or `X-Forwarded-For`) is trusted only when the request itself comes from localhost (the tunnel). Behind Render, set `TRUST_PROXY=1` so the right-most `X-Forwarded-For` entry is used. Debug mode is off. There are no debug or admin endpoints. The only optional secret is `OPENAI_API_KEY`.
+A public or shared link can otherwise pile up engine runs on the box. Heavy endpoints return 429 when either per-IP cap is hit, or when the global engine cap is busy. Screenshot reads also count toward a daily cap, but a failed OpenAI call (quota, rate limit, or timeout) is not counted. The client IP is `request.remote_addr`, except that `CF-Connecting-IP` (or `X-Forwarded-For`) is trusted only when the request itself comes from localhost (the tunnel). Behind Render, set `TRUST_PROXY=1` so the right-most `X-Forwarded-For` entry is used. Debug mode is off. There are no debug or admin endpoints. The only optional secret is `OPENAI_API_KEY`.
 
 Candles are cached in `../candle_cache/` (shared with the CLI). The first run on a market fetches about 74 days of 15m bars and takes a few seconds to a minute. Repeat runs take under a second.
 
@@ -69,7 +69,7 @@ Candles are cached in `../candle_cache/` (shared with the CLI). The first run on
   - 413 if the file is over 5 MB
   - 422 if the chart could not be read
   - 429 for the heavy or daily cap
-  - 503 if `OPENAI_API_KEY` is not set ("Screenshot reading isn't enabled yet") or the vision service is busy
+  - 503 if `OPENAI_API_KEY` is not set ("Screenshot reading isn't enabled yet"), if the vision service is busy, or if the OpenAI account is out of credit ("Screenshot reading is paused: the OpenAI account behind this site is out of credit.")
 - `POST /api/test` and `/api/compare` accept an optional `pattern` string and echo it back on a successful result as `pattern`, so the label can be shown with the result.
 
 You can also prefill the page from the URL. Adding `run=1` runs the test straight away:
