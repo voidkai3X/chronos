@@ -472,7 +472,7 @@ function drawChart(tr) {
   const padY = (hi - lo) * .08; lo -= padY; hi += padY;
   const X = x => L + (x / Math.max(1, pts.length - 1)) * w, Y = y => T + (hi - y) / (hi - lo) * h;
   const stepR = niceStep((hi - lo) / 5);
-  c.strokeStyle = "#141414"; c.lineWidth = 1;
+  c.strokeStyle = "#0d2414"; c.lineWidth = 1;
   for (let v = Math.ceil(lo / stepR) * stepR; v <= hi; v += stepR) {
     c.beginPath(); c.moveTo(L, Y(v)); c.lineTo(W - R, Y(v)); c.stroke();
     c.fillText((v > 0 ? "+" : "") + v.toFixed(stepR < 1 ? 1 : 0) + "R", 4, Y(v) + 4);
@@ -489,7 +489,7 @@ function drawChart(tr) {
   c.strokeStyle = col; c.lineWidth = 2.2; c.lineJoin = "round"; c.shadowColor = "rgba(95,214,58,.35)"; c.shadowBlur = 5; c.stroke(); c.shadowBlur = 0;
   pts.slice(1).forEach(p => { c.beginPath(); c.arc(X(p.x), Y(p.y), 3, 0, 7);
     c.fillStyle = p.t.status === "tp" ? "#3ddc84" : p.t.status === "sl" ? "#ff4d5e" : "#4cc22c"; c.fill();
-    c.strokeStyle = "#050505"; c.lineWidth = 1.2; c.stroke(); });
+    c.strokeStyle = "#010a03"; c.lineWidth = 1.2; c.stroke(); });
   c.fillStyle = "#8fa596";
   c.fillText("trade 1", L, H - 8);
   const endLbl = `trade ${closed.length} · ${wat(closed[closed.length - 1].exit)} WAT`;
