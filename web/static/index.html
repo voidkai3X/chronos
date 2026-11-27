@@ -102,6 +102,7 @@
         <ul id="ac-list" class="ac-list" role="listbox" hidden></ul>
       </div>
       <div class="price-line"><span id="mkt-id" class="mkt-id"></span><span id="price" class="price"></span></div>
+      <p class="help">Any of the 100+ MFP markets: crypto, FX, metals, stocks and indices.</p>
 
       <div class="seg-row">
         <div>
@@ -119,6 +120,7 @@
           <button type="button" data-mode="every-close">Every 4h close</button>
           <button type="button" data-mode="pattern">Pattern only</button>
         </div>
+        <p class="help" id="mode-help">Finds past moments whose price action looked like your chart, then replays your trade there.</p>
       </div>
 
       <div id="similar-opts" class="grid2 sub-opts">
@@ -133,6 +135,7 @@
           <label class="lbl" for="similar-bars">Candles in the fingerprint</label>
           <input id="similar-bars" type="number" min="8" max="96" step="1" value="24" inputmode="numeric">
         </div>
+        <p class="help span2">The chart timeframe and how many candles before your setup to compare. 24 x 1h is about one day of structure.</p>
       </div>
 
       <div id="pattern-opts" class="grid2 sub-opts" hidden>
@@ -146,6 +149,7 @@
           <label class="lbl" for="sl-buf">SL buffer (ATR past the far edge)</label>
           <input id="sl-buf" type="number" step="0.05" min="0" max="10" placeholder="auto" inputmode="decimal">
         </div>
+        <p class="help span2">Zones are found on this timeframe. The stop sits this many ATR (average candle range) beyond the zone. Leave blank to copy the distance from your own stop.</p>
       </div>
 
       <div id="style-opts" class="sub-opts" hidden>
@@ -163,12 +167,14 @@
         <div><label class="lbl lbl-sl" for="sl">Stop loss</label><input id="sl" type="number" step="any" required inputmode="decimal"></div>
       </div>
       <div class="rr-line"><span class="rr-k">R:R</span><b id="rr">-</b><span id="rr-note" class="muted"></span></div>
+      <p class="help">Levels are on this market's prices. CHRONOS keeps the same distances, scaled by volatility (ATR), at each past setup.</p>
       <div id="lvl-err" class="inline-err" hidden></div>
 
       <div class="grid2">
         <div>
           <label class="lbl" for="days">Test window: <b id="days-v">90</b> days</label>
           <input id="days" type="range" min="30" max="90" step="1" value="90">
+          <p class="help">How far back to test.</p>
         </div>
         <div>
           <label class="lbl" for="expiry">Order expiry <span class="muted" id="exp-note"></span></label>
@@ -176,10 +182,30 @@
             <option value="24h">24h</option><option value="48h">48h</option>
             <option value="72h" selected>72h</option><option value="5d">5d</option><option value="7d">7d</option>
           </select></div>
+          <p class="help">An order that hasn't filled by then is cancelled.</p>
         </div>
       </div>
       <label class="chk"><input id="trend" type="checkbox"><span class="box" aria-hidden="true"></span><span>Trend filter <span class="muted">only place when the 4h EMA50 slope agrees with the side</span></span></label>
       <label class="chk" id="insights-row"><input id="insights" type="checkbox"><span class="box" aria-hidden="true"></span><span>Insights <span class="muted">explain the result and compare limit / wider stop / sweep / confirm entries (a few seconds more; pattern-oriented)</span></span></label>
+
+      <div class="costs-block">
+        <span class="lbl">Costs and execution</span>
+        <p class="help">MFP trading fees and overnight swap are always included. Slippage is the extra price lost on market-type fills: market or stop entries, stop-loss exits and time exits. Limit entries and take profits fill at their own price. 1 bps = 0.01% of price; ticks use the market's tick size.</p>
+        <div class="grid2">
+          <div>
+            <label class="lbl" for="slip">Slippage per fill</label>
+            <input id="slip" type="number" min="0" max="100" step="0.1" value="1" inputmode="decimal">
+          </div>
+          <div>
+            <label class="lbl" for="slip-unit">Unit</label>
+            <div class="sel"><select id="slip-unit">
+              <option value="bps" selected>bps (0.01%)</option>
+              <option value="ticks">ticks</option>
+            </select></div>
+          </div>
+        </div>
+        <label class="chk" id="overlap-row"><input id="overlap" type="checkbox"><span class="box" aria-hidden="true"></span><span>Allow overlapping trades <span class="muted">Off (recommended): one order or trade at a time. On: a new setup can open while another trade is still running.</span></span></label>
+      </div>
 
       <button id="run" class="run" type="submit"><span class="spin" hidden></span><span class="txt">Run test</span></button>
       <div id="form-err" class="err" role="alert" hidden></div>
@@ -199,23 +225,50 @@
       Only candles already closed are used.</p>
       <p><b>Entry styles (pattern only):</b> <i>sweep</i> waits for price to poke past the far edge (where stops sit)
       and close back inside; <i>confirm</i> waits for a 15m candle to close through the last 15m swing after the tap.</p>
-      <p>All modes are simulated on 15m MFP candles with MFP fees. If TP and SL hit in the same candle it counts as a loss.</p>
+      <p>All modes are simulated on 15m MFP candles with MFP fees and your slippage setting. Orders are decided at a
+      candle close using only candles that had already closed; fills and exits are read from later candles only.
+      If TP and SL are both inside one candle, the order inside that candle is unknown, so it counts as a loss.
+      A take profit touched in the same candle the order filled is not counted. A gap through the stop exits at the
+      gap price, not at the stop. One order or trade at a time unless you allow overlapping trades.</p>
+      <p><b>Theoretical vs after costs:</b> theoretical results use the exact fill and exit prices with no fees or
+      slippage. After-costs results take off MFP fees, swap and slippage. The verdict uses after-costs results.</p>
     </details>
   </section>
 
   <section class="results" id="results" aria-live="polite">
     <div class="empty" id="empty">
       <svg class="inf empty-mark" viewBox="0 0 120 60" aria-hidden="true" focusable="false"><path class="inf-halo" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-halo2" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-tube" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-core" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-trace" pathLength="100" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/><path class="inf-trace inf-trace2" pathLength="100" d="M60 30C72 18 81 14 91 14C101 14 110 21 110 30C110 39 101 46 91 46C81 46 72 42 60 30C48 18 39 14 29 14C19 14 10 21 10 30C10 39 19 46 29 46C39 46 48 42 60 30Z"/></svg>
-      <h3>Ready when you are</h3>
-      <p>Pick a market, enter your entry, take profit and stop loss, or drop a chart screenshot and review what CHRONOS reads. Then run the test. CHRONOS looks for past moments with similar price action and replays the same trade. Once a market's candles are cached a run takes a few seconds. The first run on a market takes longer.</p>
+      <h3>Test an idea on real history</h3>
+      <p>Pick a market and type your entry, take profit and stop loss, or drop a chart screenshot and review what CHRONOS reads. Then run the test.</p>
       <ol class="empty-steps"><li>Upload a chart or pick a market</li><li>Review side and levels</li><li>Run test</li></ol>
+      <div class="empty-get">
+        <div class="eg-h">What you get back</div>
+        <ul>
+          <li>Win rate, profit factor, drawdown and expectancy, before and after costs</li>
+          <li>Equity curve, R distribution and monthly results</li>
+          <li>Plain-language reasons the idea worked or failed</li>
+          <li>Every simulated trade, with times and prices you can check on a chart, as CSV</li>
+        </ul>
+      </div>
+      <button type="button" class="btn-ghost" id="try-example">Try an example: BTC long at the current price</button>
+      <p class="empty-note">The first run on a market downloads its history and can take up to a minute. After that, runs take seconds.</p>
     </div>
 
     <div class="skel" id="skel" hidden aria-hidden="true">
       <div class="sk sk-verdict"></div>
       <div class="sk-cards"><div class="sk"></div><div class="sk"></div><div class="sk"></div><div class="sk"></div></div>
       <div class="sk sk-chart"></div>
-      <div class="sk-status"><span class="spin"></span><span id="skel-txt">Fetching candles and replaying your setup...</span></div>
+      <div class="sk-status"><span class="spin"></span><span id="skel-txt">Fetching candles and replaying your setup...</span><span class="sk-time" id="skel-time"></span></div>
+      <ol class="sk-steps" id="skel-steps">
+        <li>Load price history</li><li>Find past setups</li><li>Replay each trade candle by candle</li><li>Add fees and slippage, compute stats</li>
+      </ol>
+    </div>
+
+    <div class="panel res-err" id="res-err" hidden role="alert">
+      <div class="re-h" id="res-err-h">The test could not run</div>
+      <p id="res-err-msg"></p>
+      <p class="muted small" id="res-err-hint"></p>
+      <button type="button" class="btn-ghost" id="res-err-retry">Try again</button>
     </div>
 
     <div id="res" hidden>
@@ -232,8 +285,41 @@
         <!-- slot: data provenance line (sources + days actually covered) -->
         <div class="provenance" id="provenance" hidden></div>
       </div>
+      <div class="dq" id="dq" hidden></div>
       <div class="warn" id="warn" hidden></div>
+      <div class="sec-h"><span>Key numbers</span><span class="muted small" id="cards-note">after fees and slippage · theoretical underneath</span></div>
       <div class="cards" id="cards"></div>
+
+      <div class="panel why-panel" id="why-panel">
+        <div class="panel-h"><span>Why it worked or failed</span><span class="muted small">computed from this test's trades</span></div>
+        <ul class="why-list" id="why-list"></ul>
+      </div>
+
+      <div class="panel chart-panel">
+        <div class="panel-h"><span>Equity curve</span><span class="muted small">cumulative R per closed trade</span></div>
+        <canvas id="chart" height="260"></canvas>
+        <div class="legend"><span><i class="lg net"></i>After costs</span><span><i class="lg gross"></i>Theoretical</span><span><i class="lg tp"></i>TP</span><span><i class="lg sl"></i>SL</span><span><i class="lg time"></i>Time exit</span></div>
+      </div>
+
+      <div class="chart-grid">
+        <div class="panel">
+          <div class="panel-h"><span>R distribution</span><span class="muted small">trades per result, after costs</span></div>
+          <canvas id="hist" height="200"></canvas>
+        </div>
+        <div class="panel">
+          <div class="panel-h"><span>Outcomes</span><span class="muted small" id="out-note"></span></div>
+          <div class="outbar" id="outbar"></div>
+          <div class="outleg" id="outleg"></div>
+          <div class="panel-h sub-h"><span>By month</span><span class="muted small">R after costs, by exit month (UTC)</span></div>
+          <div class="monthly" id="monthly"></div>
+        </div>
+      </div>
+
+      <div class="panel" id="gvn-panel">
+        <div class="panel-h"><span>Theoretical vs after costs</span><span class="muted small" id="gvn-note"></span></div>
+        <div class="tbl-wrap gvn-wrap"><table class="gvn" id="gvn"><thead><tr><th>Metric</th><th class="r">Theoretical<br><span class="muted">no fees, no slippage</span></th><th class="r">After costs<br><span class="muted">fees + swap + slippage</span></th></tr></thead><tbody></tbody></table></div>
+        <div class="cost-line" id="cost-line"></div>
+      </div>
 
       <div class="panel sim-panel" id="sim-panel" hidden>
         <div class="panel-h"><span>Closest past moments</span><span class="muted small" id="sim-count"></span></div>
@@ -242,12 +328,18 @@
         <div class="sim-cards" id="sim-cards"></div>
       </div>
 
-      <div class="panel chart-panel">
-        <div class="panel-h"><span>Equity curve</span><span class="muted small">cumulative R, after fees</span></div>
-        <canvas id="chart" height="260"></canvas>
-        <div class="legend"><span><i class="lg tp"></i>TP</span><span><i class="lg sl"></i>SL</span><span><i class="lg time"></i>Time exit</span></div>
+      <div class="panel trades-panel" id="trades-panel">
+        <div class="panel-h"><span>Trade records</span><span class="muted small" id="t-count"></span>
+          <span class="t-tools"><label class="chk mini"><input id="t-closed" type="checkbox"><span class="box" aria-hidden="true"></span><span>Closed only</span></label>
+          <button type="button" class="btn-ghost sm" id="t-csv">Download CSV</button></span></div>
+        <p class="muted small t-lead">Tap a column to sort. Times are WAT (UTC+1). Each row lists the candle source and exact prices, so any trade can be checked on a chart.</p>
+        <div class="tbl-wrap">
+          <table id="trades">
+            <thead><tr id="trades-head"></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
-
       <div class="panel ins-panel" id="ins" hidden>
         <div class="panel-h"><span class="ph-ico" aria-hidden="true">
           <svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/></svg></span>
@@ -308,15 +400,6 @@
         </div>
       </div>
 
-      <div class="panel">
-        <div class="panel-h"><span>Simulated trades</span><span class="muted small" id="t-count"></span></div>
-        <div class="tbl-wrap">
-          <table id="trades">
-            <thead><tr id="trades-head"><th>#</th><th>Placed (WAT)</th><th>Score</th><th>Filled (WAT)</th><th>Entry</th><th>Exit (WAT)</th><th>Exit price</th><th>Result</th><th class="r">R</th></tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
       <div class="meta" id="meta"></div>
     </div>
   </section>

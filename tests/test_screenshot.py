@@ -86,8 +86,10 @@ class TestImageAndParse(unittest.TestCase):
         self.assertEqual(shot.normalize_timeframe("4h"), ("4h", "4h"))
         self.assertEqual(shot.normalize_timeframe("M15"), ("15m", "15m"))
         disp, sim = shot.normalize_timeframe("D1")
-        self.assertEqual(disp, "D1")
+        self.assertEqual(disp, "1d")  # recognised and shown in a standard form, but not a fingerprint timeframe
         self.assertIsNone(sim)
+        self.assertEqual(shot.normalize_timeframe("M5"), ("5m", None))
+        self.assertEqual(shot.normalize_timeframe("weird tf"), ("weird tf", None))
 
     def test_match_market_fuzzy(self):
         def mid(q):
@@ -470,6 +472,76 @@ class TestScreenshotAPI(unittest.TestCase):
         r = self.c.post("/api/test", json={"pattern": "SMC"}, environ_base={"REMOTE_ADDR": "203.0.113.99"})
         self.assertEqual(r.status_code, 400)
         self.assertIn("market", r.get_json()["error"])
+
+
+class TestConfirmationPanel(unittest.TestCase):
+    """Phase 1: uncertain values are never assumed; the page gets a per-field review list."""
+
+    def build(self, **over):
+        raw = {"symbol": "BTCUSDT", "side": "long", "pattern": "Fair value gap", "timeframe": "15m",
+               "entry": 60000, "take_profit": 62000, "stop_loss": 59000,
+               "confidence": {"symbol": 0.95, "side": 0.9, "pattern": 0.9, "timeframe": 0.9,
+                              "entry": 0.95, "take_profit": 0.95, "stop_loss": 0.95}, "notes": ""}
+        conf_over = over.pop("confidence", {})
+        raw.update(over)
+        raw["confidence"] = dict(raw["confidence"], **conf_over)
+        return shot.build_response(shot.parse_vision_payload(raw), MARKETS, pattern=over.get("_pattern", ""))
+
+    def test_clean_read_fills_everything(self):
+        out = self.build()
+        self.assertEqual((out["entry"], out["tp"], out["sl"], out["side"]), (60000, 62000, 59000, "long"))
+        self.assertEqual(out["similar_tf"], "15m")
+        self.assertEqual(out["pattern"], "Fair value gap")
+        self.assertEqual(out["low_confidence"], [])
+        self.assertEqual(out["suggested"], {})
+        self.assertTrue(out["levels_consistent"])
+        self.assertEqual({f["key"]: f["action"] for f in out["fields"]}["entry"], "filled")
+
+    def test_very_low_confidence_price_is_left_blank_and_only_suggested(self):
+        out = self.build(confidence={"stop_loss": 0.2})
+        self.assertIsNone(out["sl"])
+        self.assertEqual(out["suggested"]["sl"], 59000)
+        self.assertIn("stop loss", out["missing"])
+        f = {x["key"]: x for x in out["fields"]}["stop_loss"]
+        self.assertEqual((f["action"], f["level"]), ("suggested", "very low"))
+        self.assertIn("too unclear", out["review"])
+
+    def test_low_confidence_side_and_market_not_applied(self):
+        out = self.build(confidence={"side": 0.1, "symbol": 0.2})
+        self.assertIsNone(out["side"])
+        self.assertIsNone(out["market"])
+        self.assertEqual(out["suggested"]["market"]["market_id"], "binance|BTCUSDT")
+        self.assertIn("side", out["missing"])
+        self.assertIn("market", out["missing"])
+
+    def test_medium_confidence_is_filled_but_flagged(self):
+        out = self.build(confidence={"take_profit": 0.55})
+        self.assertEqual(out["tp"], 62000)
+        self.assertIn("take profit", out["low_confidence"])
+        self.assertEqual({f["key"]: f["action"] for f in out["fields"]}["take_profit"], "check")
+
+    def test_levels_that_contradict_the_side_are_all_flagged(self):
+        out = self.build(stop_loss=61000)  # long with stop above entry
+        self.assertFalse(out["levels_consistent"])
+        for k in ("side", "entry", "take profit", "stop loss"):
+            self.assertIn(k, out["low_confidence"])
+        self.assertIn("do not match the side", out["review"])
+
+    def test_pattern_rules(self):
+        self.assertEqual(self.build(_pattern="My ICT model")["pattern"], "My ICT model")  # trader's own label wins
+        self.assertEqual(self.build(confidence={"pattern": 0.5})["pattern"], "")  # unsure pattern is not applied
+        self.assertEqual(self.build(confidence={"pattern": 0.5})["pattern_read"], "Fair value gap")
+
+    def test_unsupported_timeframe_is_reported_not_forced(self):
+        out = self.build(timeframe="D1")
+        self.assertEqual(out["timeframe"], "1d")
+        self.assertIsNone(out["similar_tf"])
+        self.assertIn("left at its default", out["review"])
+
+    def test_schema_asks_for_pattern_with_confidence(self):
+        self.assertIn("pattern", shot.SCHEMA["required"])
+        self.assertIn("pattern", shot.SCHEMA["properties"]["confidence"]["required"])
+        self.assertIn("Do not name a pattern from candle shapes alone", shot.SYSTEM)
 
 
 if __name__ == "__main__":

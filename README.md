@@ -81,6 +81,9 @@ Level formats:
 | `--sweep-window` | = expiry | Window after the fill for the stop check |
 | `--sweep-atr` | 1.0 | How far past the stop still counts as a "wick" sweep |
 | `--no-fees` | off | Ignore commissions and swap |
+| `--slippage-bps` | 1 | Slippage on market entries, stop entries, stop-loss and time exits, in basis points (1 bps = 0.01% of price). Limit entries and take-profit fills get none. 0-100 |
+| `--slippage-ticks` | off | Slippage in ticks of the market's tick size instead of bps (0-1000) |
+| `--allow-overlap` | off | Let a new trade open while another is still running. Off by default: one trade at a time. Not available in pattern mode |
 | `--refresh` | off | Ignore the candle cache |
 | `--ref` | last close | Override the current price |
 | `--mode` | every-close | `similar`, `every-close` (CLI default) or `pattern`. The web app defaults to `similar` |
@@ -339,7 +342,7 @@ Output includes orders, fills, unfilled orders, TP, SL and time exits; win rate 
 - The zone rule's defaults were chosen before looking at results and were not optimised. Changing them and keeping whichever looks best would be curve-fitting on a tiny sample.
 - One trade at a time gives about 15–45 trades in 90 days. Most single setups will read "too few samples". Treat any result under about 50 trades as a rough check, not proof.
 - 15m candles cannot show the order of moves inside a bar. The tie rules always assume the worse case.
-- Funding and slippage beyond bar gaps are not modelled yet.
+- Slippage is a fixed assumption (default 1 bps), not measured from order books. Funding is not modelled yet.
 - Results describe the past only. They are not a forecast and not advice.
 
 ## Disclaimer
@@ -354,9 +357,12 @@ The `*_90d.*` files are the 90-day reruns with insights, made 24 Nov 2026 23:40 
 
 ## Roadmap
 
+The full plan is in `docs/ROADMAP.md`, and the Phase 1 audit is in `docs/AUDIT.md`.
+
+
 **Week 1**
 - ~~Extend coverage to a 90-day window by merging public sources, with every bar labelled by source.~~ Done.
-- Model slippage (beyond the current gap-through-SL-at-open rule).
+- ~~Model slippage (beyond the current gap-through-SL-at-open rule).~~ Done in Phase 1 (`--slippage-bps`, `--slippage-ticks`).
 - Add per-IP rate limits before any public hosting.
 
 **Later**

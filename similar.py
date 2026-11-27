@@ -288,7 +288,7 @@ def search(zb, atr, step, query, n, k=SIMILAR_K, start_ms=None, end_ms=None, htf
 def replay_similar(base, g, tf=SIMILAR_TF, n=SIMILAR_BARS, k=SIMILAR_K, expiry_ms=72 * 3600_000,
                    start_ms=None, end_ms=None, fee_pct=0.0, swap_pct_day=0.0, max_hold_ms=None,
                    sweep_window_ms=None, sweep_atr=1.0, trend_filter=False, interval="15m",
-                   query=None, exclude_query=True):
+                   query=None, exclude_query=True, slip_bps=0.0, slip_abs=0.0, allow_overlap=False):
     """Find similar windows and place the setup's ATR geometry at each, oldest first, one trade at a time.
 
     query: a fingerprint from the source setup (required for other markets; on the source market
@@ -348,11 +348,13 @@ def replay_similar(base, g, tf=SIMILAR_TF, n=SIMILAR_BARS, k=SIMILAR_K, expiry_m
                                    fee_pct=fee_pct, swap_pct_day=swap_pct_day, max_hold_ms=max_hold_ms,
                                    sweep_window_ms=sweep_window_ms, sweep_atr=sweep_atr,
                                    tr=dict(ref=ref, similar_distance=m["distance"], similar_score=m["score"],
-                                           similar_t=t))
+                                           similar_t=t), slip_bps=slip_bps, slip_abs=slip_abs)
         trades.append(tr)
         m = dict(m, entry=geo["entry"], sl=geo["sl"], tp=geo["tp"],
                  status=tr["status"], r_net=tr.get("r_net"), exit=tr.get("exit"))
         placed_matches.append(m)
+        if allow_overlap:
+            continue
         if nxt is None:
             break
         busy = nxt

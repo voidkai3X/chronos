@@ -192,11 +192,23 @@ def transfer_geometry(g_user, ref, atr_now, market_id=None):
 
 
 # ---------------------------------------------------------------- replay
+def slip_amount(price, slip_bps=0.0, slip_abs=0.0):
+    """Price distance one market-type fill loses to slippage: a fixed amount (ticks x tick size) or bps of price."""
+    if slip_abs:
+        return abs(slip_abs)
+    return abs(price) * max(0.0, slip_bps or 0.0) / 10_000
+
+
 def simulate_order(base, j, t, entry, sl, tp, sgn, entry_type, expiry_ms, atr_t, risk=None, fee_pct=0.0,
-                   swap_pct_day=0.0, max_hold_ms=None, sweep_window_ms=None, sweep_atr=1.0, tr=None):
+                   swap_pct_day=0.0, max_hold_ms=None, sweep_window_ms=None, sweep_atr=1.0, tr=None,
+                   slip_bps=0.0, slip_abs=0.0):
     """Simulate one order placed at time t (base[j] is the first bar with openTime >= t).
     Returns (trade dict, next_free_time or None if the data ran out). Shared by every mode.
-    Conservative: SL wins any same-bar tie, TP not counted on the fill bar, gaps through SL exit at the open."""
+    Conservative: SL wins any same-bar tie, TP not counted on the fill bar, gaps through SL exit at the open.
+
+    Slippage (slip_bps of price, or slip_abs in price units) is charged on market-type fills only: market and
+    stop entries, stop-loss exits and time exits. Limit entries and take-profit exits are resting limit orders
+    and fill at their price. r_gross is the theoretical result (no fees, no slippage); r_net is after both."""
     risk = abs(entry - sl) if risk is None else risk
     sweep_window_ms = sweep_window_ms or expiry_ms
     tr = dict(tr or {}, placed=t, entry=entry, sl=sl, tp=tp, status="unfilled")
@@ -223,7 +235,9 @@ def simulate_order(base, j, t, entry, sl, tp, sgn, entry_type, expiry_ms, atr_t,
         tr["status"] = "unfilled"
         return tr, t + expiry_ms
     tr["filled"] = base[fill_j][0]
-    tr["fill_px"] = fill_px
+    slip_in = slip_amount(fill_px, slip_bps, slip_abs) if entry_type in ("market", "stop") else 0.0
+    tr["fill_px_theoretical"] = fill_px
+    tr["fill_px"] = fill_px + sgn * slip_in
     # ---- manage
     exit_j = exit_px = None
     res = None
@@ -238,11 +252,19 @@ def simulate_order(base, j, t, entry, sl, tp, sgn, entry_type, expiry_ms, atr_t,
             # fill bar: intrabar order unknown -> SL counts, TP does not (conservative)
             if hit_sl:
                 exit_j, exit_px, res = k, sl, "sl"
+                if hit_tp:
+                    tr["same_bar_tp_sl"] = True
                 break
+            if hit_tp:
+                tr["tp_touched_on_fill_bar"] = True
             continue
         if hit_sl:  # includes TP+SL same bar -> SL
             gap = (o < sl) if sgn == 1 else (o > sl)
             exit_j, exit_px, res = k, (o if gap else sl), "sl"
+            if gap:
+                tr["exit_reason"] = "sl_gap_open"
+            elif hit_tp:
+                tr["same_bar_tp_sl"] = True
             break
         if hit_tp:
             exit_j, exit_px, res = k, tp, "tp"
@@ -252,10 +274,15 @@ def simulate_order(base, j, t, entry, sl, tp, sgn, entry_type, expiry_ms, atr_t,
         return tr, None
     exit_t = base[exit_j][0] + (base[1][0] - base[0][0])
     hours = max(0, (exit_t - tr["filled"]) / 3600_000)
+    slip_out = slip_amount(exit_px, slip_bps, slip_abs) if res in ("sl", "time") else 0.0
+    fill_net, exit_net = tr["fill_px"], exit_px - sgn * slip_out
     gross = (exit_px - fill_px) * sgn / risk
-    cost = (fee_pct / 100 * (fill_px + exit_px) + swap_pct_day / 100 / 24 * fill_px * math.floor(hours)) / risk
-    tr.update(status=res, exit=exit_t, exit_px=exit_px, hours=round(hours, 2),
-              r_gross=round(gross, 4), r_net=round(gross - cost, 4))
+    r_slip = (slip_in + slip_out) / risk
+    r_fee = (fee_pct / 100 * (fill_net + exit_net) + swap_pct_day / 100 / 24 * fill_net * math.floor(hours)) / risk
+    tr.setdefault("exit_reason", {"tp": "tp", "sl": "sl", "time": "time_stop"}[res])
+    tr.update(status=res, exit=exit_t, exit_bar=base[exit_j][0], exit_px=exit_net, exit_px_theoretical=exit_px,
+              hours=round(hours, 2), r_gross=round(gross, 4), r_slip=round(r_slip, 4), r_fee=round(r_fee, 4),
+              r_net=round(gross - r_slip - r_fee, 4))
     # ---- stop-too-tight check: after SL, did price reach TP within window (from fill)?
     # (this check deliberately looks past the exit; it never changes the trade itself)
     if res == "sl":
@@ -279,7 +306,8 @@ def simulate_order(base, j, t, entry, sl, tp, sgn, entry_type, expiry_ms, atr_t,
 
 
 def replay(base, h4, g, mode="atr", expiry_ms=72 * 3600_000, step_ms=H4, trend_filter=False,
-           sweep_window_ms=None, sweep_atr=1.0, fee_pct=0.0, swap_pct_day=0.0, start_ms=None, max_hold_ms=None):
+           sweep_window_ms=None, sweep_atr=1.0, fee_pct=0.0, swap_pct_day=0.0, start_ms=None, max_hold_ms=None,
+           slip_bps=0.0, slip_abs=0.0, allow_overlap=False):
     """Every-close mode. Walk forward through history. At each eligible 4h close (t) with no open order/trade,
     place the setup using only info known at t (last closed 4h close as reference, ATR/EMA from closed 4h bars),
     then simulate it on base bars with openTime >= t. Conservative fills: SL wins any same-bar tie."""
@@ -317,8 +345,11 @@ def replay(base, h4, g, mode="atr", expiry_ms=72 * 3600_000, step_ms=H4, trend_f
             break
         tr, nxt = simulate_order(base, j, t, entry, sl, tp, sgn, g["entry_type"], expiry_ms, risk / g["risk_atr"],
                                  risk=risk, fee_pct=fee_pct, swap_pct_day=swap_pct_day, max_hold_ms=max_hold_ms,
-                                 sweep_window_ms=sweep_window_ms, sweep_atr=sweep_atr, tr=dict(ref=ref))
+                                 sweep_window_ms=sweep_window_ms, sweep_atr=sweep_atr, tr=dict(ref=ref),
+                                 slip_bps=slip_bps, slip_abs=slip_abs)
         trades.append(tr)
+        if allow_overlap:  # every eligible close gets its own order, even while another trade is open
+            continue
         if nxt is None:
             break
         busy_until = nxt
@@ -443,7 +474,8 @@ def derive_sl_buffer(zones_all, side, entry, sl, atr_now):
 
 def replay_pattern(base, g, zone_tf="4h", expiry_ms=30 * 86400_000, max_touches=1, sl_buffer_atr=0.3,
                    trend_filter=False, sweep_window_ms=None, sweep_atr=1.0, fee_pct=0.0, swap_pct_day=0.0,
-                   start_ms=None, max_hold_ms=None, zone_max_age_ms=30 * 86400_000, zone_params=None):
+                   start_ms=None, max_hold_ms=None, zone_max_age_ms=30 * 86400_000, zone_params=None,
+                   slip_bps=0.0, slip_abs=0.0):
     """Pattern mode. At each zone-tf close t when flat, look only at zones confirmed at or before t that are
     still alive at t and have been touched fewer than max_touches times before t. Pick the one nearest to the
     current price (price must still be on the far side of its proximal edge) and rest a limit at its proximal edge:
@@ -515,7 +547,8 @@ def replay_pattern(base, g, zone_tf="4h", expiry_ms=30 * 86400_000, max_touches=
         tr, nxt = simulate_order(base, j, t, z["proximal"], sl, tp, sgn, "limit", zstep, a, risk=risk, fee_pct=fee_pct,
                                  swap_pct_day=swap_pct_day, max_hold_ms=max_hold_ms, sweep_window_ms=sweep_window_ms,
                                  sweep_atr=sweep_atr, tr=dict(ref=ref, zone=n, zone_known=z["known"],
-                                                              zone_proximal=z["proximal"], zone_distal=z["distal"], atr=a))
+                                                              zone_proximal=z["proximal"], zone_distal=z["distal"], atr=a),
+                                 slip_bps=slip_bps, slip_abs=slip_abs)
         if tr["status"] == "unfilled":
             continue
         tr["placed"] = t0
@@ -544,7 +577,7 @@ def replay_pattern_triggered(base, g, entry_style, zone_tf="4h", confirm_tf="15m
                              trigger_window_ms=None, sweep_min_atr=0.1, sweep_max_atr=1.5, skip_strong_atr=None,
                              swing_n=2, trend_filter=False, sweep_window_ms=None, sweep_atr=1.0, fee_pct=0.0,
                              swap_pct_day=0.0, start_ms=None, max_hold_ms=None, zone_max_age_ms=30 * 86400_000,
-                             zone_params=None):
+                             zone_params=None, slip_bps=0.0, slip_abs=0.0):
     """Pattern mode with a trigger instead of a blind limit. Same zones, same 15m fill/exit engine, same fees.
 
     Watch starts when price first taps a fresh zone's near edge (the tap is a base-bar time, known when it happens).
@@ -683,7 +716,8 @@ def replay_pattern_triggered(base, g, entry_style, zone_tf="4h", confirm_tf="15m
         tr, nxt = simulate_order(base, j, te, entry, sl, tp, sgn, "market", bstep, a, risk=risk, fee_pct=fee_pct,
                                  swap_pct_day=swap_pct_day, max_hold_ms=max_hold_ms, sweep_window_ms=sweep_window_ms,
                                  sweep_atr=sweep_atr, tr=dict(info, trigger=te, tap_extreme=ext,
-                                                              swing_level=swing[1] if swing and entry_style == "confirm" else None))
+                                                              swing_level=swing[1] if swing and entry_style == "confirm" else None),
+                                 slip_bps=slip_bps, slip_abs=slip_abs)
         tr["placed"] = tt
         trades.append(tr)
         traded.add(n)
@@ -844,6 +878,14 @@ def text_report(out):
              f"New order at each 4h close when flat, expiry {p['expiry']}" + hold
              + (", only when 4h EMA50 slope agrees" if p['trend_filter'] else "") + ".", ""]
     L += result_lines(s, p)
+    st = out.get("stats")
+    if st and st["closed"]:
+        gr, nt = st["gross"], st["net"]
+        pf = lambda b: "n/a" if b["profit_factor"] is None else f"{b['profit_factor']:.2f}"
+        L.append(f"Theoretical (no costs): {gr['total_r']:+.2f}R, PF {pf(gr)}, expectancy {gr['expectancy_r']:+.3f}R. "
+                 f"After fees + slippage: {nt['total_r']:+.2f}R, PF {pf(nt)}, expectancy {nt['expectancy_r']:+.3f}R.")
+        L.append(f"Streaks: longest win {nt['longest_win_streak']}, longest loss {nt['longest_loss_streak']}. "
+                 f"Avg time in trade {st['duration_h']['avg']}h. Slippage: {out['costs']['slippage']['text']}.")
     if p["trend_filter"]:
         L.append(f"Trend filter skipped {out['skipped_by_trend']} eligible closes. Trend now: {out['trend_now']}.")
     if p.get("mode") not in ("pattern", "similar") and abs(g["entry_atr"]) > 3:
@@ -1120,11 +1162,100 @@ def _extra_markets(basket, markets):
     return parse_basket(basket, markets)
 
 
+DEFAULT_SLIPPAGE_BPS = 1.0  # per market-type fill (market / stop entries, stop-loss and time exits)
+
+
+def slippage_for(a, m):
+    """Slippage per market-type fill for market m: --slippage-ticks (x the market's tick size) or --slippage-bps."""
+    ticks = float(getattr(a, "slippage_ticks", 0) or 0)
+    bps = getattr(a, "slippage_bps", None)
+    bps = DEFAULT_SLIPPAGE_BPS if bps is None else float(bps)
+    tick = float(m.get("tick_size") or 0)
+    if ticks > 0 and tick > 0:
+        return dict(unit="ticks", ticks=ticks, tick_size=tick, abs=ticks * tick, bps=0.0,
+                    text=f"{ticks:g} tick(s) of {tick:g} per market-type fill")
+    return dict(unit="bps", bps=max(0.0, bps), abs=0.0, ticks=None, tick_size=tick or None,
+                text=f"{bps:g} bps ({bps / 100:g}%) of price per market-type fill")
+
+
+def _unexpected_gaps(base, step, session):
+    """[(from_ms, to_ms)] holes in the candles that are not normal weekend closures."""
+    import sources
+    out = []
+    for x, y in zip(base, base[1:]):
+        if y[0] - x[0] > step:
+            s, e = x[0] + step, y[0]
+            if not (session and sources._weekendish(s, e)):
+                out.append((s, e))
+    return out
+
+
+def annotate_trades(trades, base, prov, step, interval, m):
+    """Traceability fields on every trade (added after the simulation, never used by it):
+    interval, candle source of the fill bar, data holes while the order/trade was live, and a candle window
+    (signal - 48 bars .. exit + 24 bars) so the trade can be re-drawn from the same cached candles."""
+    segs = sorted(prov.get("segments") or [], key=lambda x: x["from_ms"])
+    session = m.get("provider") in ("veranta", "ostium") or any(
+        x["source"].startswith(("yahoo", "dukascopy")) for x in segs)
+    gaps = _unexpected_gaps(base, step, session)
+    for t in trades:
+        t["interval"] = interval
+        t["signal"] = t.get("placed")
+        anchor = t.get("filled") or t.get("placed")
+        src = None
+        for sg in segs:
+            if anchor is not None and sg["from_ms"] <= anchor < sg["to_ms"]:
+                src = sg["source"]
+        t["source"] = src or (segs[0]["source"] if len(segs) == 1 else None)
+        lo = t.get("placed") or anchor
+        hi = t.get("exit") or (t.get("cancelled") or lo)
+        if lo is not None:
+            missing = sum((e - s) // step for s, e in gaps if s < hi and e > lo)
+            if missing:
+                t["gap_bars_in_trade"] = int(missing)
+            t["candle_window"] = dict(interval=interval, from_ms=lo - 48 * step, to_ms=(hi or lo) + 24 * step)
+
+
+def data_quality(data, s, stats):
+    """ok | warn | insufficient, with plain messages. Based only on what was loaded and traded."""
+    msgs, status = [], "ok"
+    pv = data.get("provenance") or {}
+    g = pv.get("gaps") or {}
+    bars = data.get("bars") or 0
+    miss = g.get("missing_bars") or 0
+    if data.get("days_requested") and data.get("days") is not None and data["days"] < data["days_requested"]:
+        msgs.append(f"Only {data['days']:g} of the {data['days_requested']} days asked for exist in the data; "
+                    "results cover the shorter window.")
+        status = "warn"
+    if bars and miss / (bars + miss) > 0.01:
+        msgs.append(f"{miss} candles are missing inside the window ({g.get('gaps', 0)} holes, not counting weekends). "
+                    "Trades open across a hole are flagged in the trade list.")
+        status = "warn"
+    elif miss:
+        msgs.append(f"{miss} candles missing in {g.get('gaps', 0)} small holes (under 1% of the data).")
+    for c in pv.get("overlap_checks") or []:
+        if str(c.get("status", "")).startswith("unverified"):
+            msgs.append(f"Older candles from {c['source'].split(':')[0]} could not be cross-checked against newer data.")
+            status = "warn"
+    if pv.get("mfp_unavailable"):
+        msgs.append("The MFP feed was unavailable, so backup sources supplied the candles.")
+        status = "warn"
+    if s["closed"] < MIN_SAMPLES:
+        msgs.append(f"Only {s['closed']} closed trades: below the {MIN_SAMPLES} needed for a verdict. "
+                    "Not enough data to call this an edge or not.")
+        status = "insufficient"
+    if stats["integrity"]["overlapping_trades"]:
+        msgs.append(f"{stats['integrity']['overlapping_trades']} trades overlapped another open trade "
+                    "(allowed by the 'allow overlapping trades' option).")
+    return dict(status=status, messages=msgs, missing_bars=miss, holes=g.get("gaps", 0), bars=bars)
+
+
 def run_market(m, a, g_user, mode, end_ms, start_ms, warm, expiry, sl_buffer, sl_src, zone_params, query=None):
     """Run one market. g_user is the user's setup; other markets get the same shape in ATR units."""
     base = fetch_candles(m, a.interval, start_ms - warm, end_ms, refresh=a.refresh)
     if len(base) < 200:
-        raise SystemExit(f"not enough history for {m['market_id']} ({len(base)} bars)")
+        raise SystemExit(f"Not enough price history for {m['market_id']}: only {len(base)} candles were found, "
+                         "and at least 200 are needed. No result was produced.")
     start_ms, data = data_block(m, a, base, start_ms, end_ms, warm)
     step = STEP[a.interval]
     h4 = resample(base, H4)
@@ -1140,9 +1271,12 @@ def run_market(m, a, g_user, mode, end_ms, start_ms, warm, expiry, sl_buffer, sl
             g["ref"] = ref
     cls = asset_class(m)
     fee, swap = (0.0, 0.0) if a.no_fees else FEES[cls]
+    slip = slippage_for(a, m)
     common = dict(fee_pct=fee, swap_pct_day=swap, start_ms=start_ms, sweep_atr=a.sweep_atr,
                   sweep_window_ms=parse_dur(a.sweep_window) if a.sweep_window else None,
-                  max_hold_ms=None if str(a.max_hold).lower() == "none" else parse_dur(a.max_hold))
+                  max_hold_ms=None if str(a.max_hold).lower() == "none" else parse_dur(a.max_hold),
+                  slip_bps=slip["bps"], slip_abs=slip["abs"])
+    allow_overlap = bool(getattr(a, "allow_overlap", False))
     zstats = zlist = matches = q_used = None
     if mode == "similar":
         import similar as S
@@ -1154,7 +1288,9 @@ def run_market(m, a, g_user, mode, end_ms, start_ms, warm, expiry, sl_buffer, sl
             trend_filter=a.trend_filter, interval=a.interval, query=query, exclude_query=True,
             fee_pct=fee, swap_pct_day=swap,
             sweep_window_ms=common["sweep_window_ms"], sweep_atr=common["sweep_atr"],
-            max_hold_ms=common["max_hold_ms"])
+            max_hold_ms=common["max_hold_ms"], slip_bps=slip["bps"], slip_abs=slip["abs"],
+            allow_overlap=allow_overlap)
+        setups, basis = len(matches), f"similar past windows found (up to {k})"
     elif mode == "pattern":
         style = getattr(a, "entry_style", "limit") or "limit"
         if style == "limit":
@@ -1171,11 +1307,22 @@ def run_market(m, a, g_user, mode, end_ms, start_ms, warm, expiry, sl_buffer, sl
                       height_atr=z["height_atr"], impulse_atr=z["impulse_atr"],
                       first_touch=z["touches"][0] if z["touches"] else None,
                       dead=z["dead"]) for z in zones if z["known"] >= start_ms]
+        if style == "limit":
+            setups, basis = zstats["zones_found"], f"fresh {a.zone_tf} {'supply' if g['side'] == 'short' else 'demand'} zones found"
+        else:
+            setups, basis = len(trades) + skipped, f"fresh-zone taps watched for a {style} trigger"
     else:
-        trades, skipped = replay(base, h4, g, mode=a.geometry, expiry_ms=expiry, trend_filter=a.trend_filter, **common)
+        trades, skipped = replay(base, h4, g, mode=a.geometry, expiry_ms=expiry, trend_filter=a.trend_filter,
+                                 allow_overlap=allow_overlap, **common)
+        setups, basis = len(trades) + skipped, "4h closes where an order could be placed" + (
+            " (incl. ones the trend filter skipped)" if a.trend_filter else "")
     for t in trades:
         t["market"] = m["market_id"]
+    annotate_trades(trades, base, data.get("provenance") or {}, step, a.interval, m)
     s = summarize(trades, g)
+    import metrics as MX
+    stats = MX.compute(trades, setups_identified=setups, setups_basis=basis)
+    stats["why"] = MX.explain(stats, trades, MIN_SAMPLES)
     trend_now = None
     if ema[-1] is not None and ema[-6] is not None:
         trend_now = "up" if ema[-1] > ema[-6] else "down"
@@ -1183,7 +1330,10 @@ def run_market(m, a, g_user, mode, end_ms, start_ms, warm, expiry, sl_buffer, sl
                setup={k: (round(v, 6) if isinstance(v, float) else v) for k, v in g.items()},
                data=dict(data, first_order_ms=trades[0]["placed"] if trades else None),
                fees=dict(asset_class=cls, commission_pct_per_fill=fee, swap_pct_per_day=swap),
-               skipped_by_trend=skipped, trend_now=trend_now, result=s)
+               costs=dict(asset_class=cls, commission_pct_per_fill=fee, swap_pct_per_day=swap, slippage=slip,
+                          allow_overlap=allow_overlap),
+               skipped_by_trend=skipped, trend_now=trend_now, result=s, stats=stats)
+    out["data_quality"] = data_quality(out["data"], s, stats)
     if zstats is not None:
         out["zones"] = dict(zstats, list=zlist)
     if matches is not None:
@@ -1257,6 +1407,14 @@ def main(argv=None):
                          "or a comma list of markets")
     ap.add_argument("--ref", type=float, help="override current price")
     ap.add_argument("--no-fees", action="store_true")
+    ap.add_argument("--slippage-bps", type=float, default=None,
+                    help=f"slippage per market-type fill (market/stop entry, SL and time exits), in basis points of price "
+                         f"(default {DEFAULT_SLIPPAGE_BPS:g}; 0 = none). Limit entries and TP fill at their price")
+    ap.add_argument("--slippage-ticks", type=float, default=0.0,
+                    help="slippage per market-type fill in ticks of the market's tick size (overrides --slippage-bps)")
+    ap.add_argument("--allow-overlap", action="store_true",
+                    help="every-close / similar: let a new order open while another trade is still live "
+                         "(default: one order or trade at a time)")
     ap.add_argument("--refresh", action="store_true", help="ignore candle cache")
     ap.add_argument("--json", action="store_true", help="print JSON instead of text")
     ap.add_argument("--json-out", help="also write JSON (with trade list) to this path")
@@ -1266,7 +1424,13 @@ def main(argv=None):
     if not (5 <= a.similar_k <= 80):
         raise SystemExit("--similar-k must be between 5 and 80")
 
+    if a.slippage_bps is not None and not (0 <= a.slippage_bps <= 100):
+        raise SystemExit("--slippage-bps must be between 0 and 100")
+    if not (0 <= (a.slippage_ticks or 0) <= 1000):
+        raise SystemExit("--slippage-ticks must be between 0 and 1000")
     mode = a.mode
+    if a.allow_overlap and mode == "pattern":
+        raise SystemExit("--allow-overlap works with every-close and similar modes; pattern mode trades one zone at a time")
     expiry_s = a.expiry or ("30d" if mode == "pattern" else "72h")
     expiry = parse_dur(expiry_s)
     markets = load_markets()
@@ -1280,7 +1444,8 @@ def main(argv=None):
     USE_BACKUPS = not a.no_backups
     base = fetch_candles(m, a.interval, start_ms - warm, end_ms, refresh=a.refresh)
     if len(base) < 200:
-        raise SystemExit(f"not enough history for {m['market_id']} ({len(base)} bars)")
+        raise SystemExit(f"Not enough price history for {m['market_id']}: only {len(base)} candles were found, "
+                         "and at least 200 are needed. No result was produced.")
     h4c = [b for b in resample(base, H4) if b[5] >= b[0] + H4 - step]
     atr_now = atr_series(h4c)[-1]
     ref = a.ref or base[-1][4]
@@ -1397,7 +1562,14 @@ def run_setup(a, mode, ctx, sl_buffer, sl_src, basket):
     params = dict(mode=mode, geometry=a.geometry, expiry=expiry_s,
                   sweep_window=a.sweep_window or (expiry_s if mode != "pattern" else "7d"), sweep_atr=a.sweep_atr,
                   max_hold=a.max_hold, trend_filter=a.trend_filter,
-                  tie_rule="TP and SL in same bar = SL; TP not counted on the fill bar; gaps through SL fill at open")
+                  tie_rule="TP and SL in same bar = SL; TP not counted on the fill bar; gaps through SL fill at open",
+                  slippage_bps=None if a.slippage_ticks else (DEFAULT_SLIPPAGE_BPS if a.slippage_bps is None else a.slippage_bps),
+                  slippage_ticks=a.slippage_ticks or None, allow_overlap=bool(a.allow_overlap),
+                  one_at_a_time=not a.allow_overlap,
+                  slippage_rule="charged on market and stop entries, stop-loss and time exits; limit entries and TP "
+                                "fill at their price",
+                  lookahead_rule="orders are decided at a candle close using only candles already closed; "
+                                 "fills and exits are read from later candles only")
     if mode == "pattern":
         params.update(placement=(f"at each {a.zone_tf} close when flat, limit at the near edge of the nearest fresh zone "
                                  f"(one order/trade at a time)") if style == "limit" else
@@ -1424,8 +1596,13 @@ def run_setup(a, mode, ctx, sl_buffer, sl_src, basket):
     else:
         trades = sorted((t for _, tr in runs for t in tr), key=lambda t: t.get("exit") or t["placed"])
         pooled = summarize(trades, g)
+        import metrics as MX
+        pstats = MX.compute(trades, setups_identified=sum(r[0]["stats"]["setups_identified"] for r in runs),
+                            setups_basis=runs[0][0]["stats"]["setups_basis"] + ", all markets")
+        pstats["why"] = MX.explain(pstats, trades, MIN_SAMPLES)
         out = dict(head, market=runs[0][0]["market"], setup=runs[0][0]["setup"], data=runs[0][0]["data"],
-                   basket=[r[0]["market"]["market_id"] for r in runs], per_market=[r[0] for r in runs], result=pooled)
+                   basket=[r[0]["market"]["market_id"] for r in runs], per_market=[r[0] for r in runs], result=pooled,
+                   stats=pstats, costs=runs[0][0].get("costs"))
         if mode == "pattern":
             out["zones"] = {k: sum(r[0]["zones"][k] for r in runs) for k in ("zones_found", "zones_traded", "zones_touched", "zones_invalidated")}
         if mode == "similar":

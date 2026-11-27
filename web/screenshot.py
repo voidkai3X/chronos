@@ -9,7 +9,8 @@ import base64, os, re, json
 MAX_BYTES = 5 * 1024 * 1024
 PATTERN_MAX = 120
 NOTES_MAX = 400
-LOW_CONFIDENCE = 0.7
+LOW_CONFIDENCE = 0.7   # below this a filled field is highlighted for the trader to check
+BLANK_BELOW = 0.4      # below this a value is NOT filled in; it is shown only as a suggestion to accept or ignore
 DEFAULT_MODEL = "gpt-4o-mini"
 VISION_TIMEOUT_S = 45
 
@@ -35,11 +36,14 @@ ALIASES = {
 }
 
 TF_CANON = {
+    "5M": "5m", "5MIN": "5m", "M5": "5m",
     "15M": "15m", "15MIN": "15m", "M15": "15m",
     "30M": "30m", "30MIN": "30m", "M30": "30m",
     "1H": "1h", "H1": "1h", "60M": "1h", "60MIN": "1h", "1HR": "1h", "1HOUR": "1h",
-    "4H": "4h", "H4": "4h",
+    "4H": "4h", "H4": "4h", "240": "4h", "240M": "4h",
+    "1D": "1d", "D": "1d", "D1": "1d", "DAILY": "1d",
 }
+SIMILAR_TFS = ("15m", "30m", "1h", "4h")  # fingerprint timeframes the tester supports today
 
 SCHEMA = {
     "type": "object",
@@ -47,6 +51,7 @@ SCHEMA = {
     "properties": {
         "symbol": {"type": ["string", "null"]},
         "side": {"type": ["string", "null"], "enum": ["long", "short", None]},
+        "pattern": {"type": ["string", "null"]},
         "timeframe": {"type": ["string", "null"]},
         "entry": {"type": ["number", "null"]},
         "take_profit": {"type": ["number", "null"]},
@@ -57,16 +62,17 @@ SCHEMA = {
             "properties": {
                 "symbol": {"type": "number"},
                 "side": {"type": "number"},
+                "pattern": {"type": "number"},
                 "timeframe": {"type": "number"},
                 "entry": {"type": "number"},
                 "take_profit": {"type": "number"},
                 "stop_loss": {"type": "number"},
             },
-            "required": ["symbol", "side", "timeframe", "entry", "take_profit", "stop_loss"],
+            "required": ["symbol", "side", "pattern", "timeframe", "entry", "take_profit", "stop_loss"],
         },
         "notes": {"type": "string"},
     },
-    "required": ["symbol", "side", "timeframe", "entry", "take_profit", "stop_loss", "confidence", "notes"],
+    "required": ["symbol", "side", "pattern", "timeframe", "entry", "take_profit", "stop_loss", "confidence", "notes"],
 }
 
 SYSTEM = (
@@ -81,7 +87,10 @@ SYSTEM = (
     "Do not guess a market from the candle shape alone. If the symbol is not visible, return null. "
     "Side must be \"long\" or \"short\". Infer it from a labelled long/short or buy/sell, "
     "or from the relationship of TP and SL to entry only when those three prices are all clearly visible. Otherwise null. "
-    "Timeframe: copy the chart's timeframe as shown (for example 15m, 1h, 4h, D1). "
+    "Timeframe: copy the chart's timeframe as shown (for example 5m, 15m, 1h, 4h, D1). If no timeframe label is visible, null. "
+    "pattern: a short name for the setup drawn on the chart only if it is clearly marked or labelled (for example "
+    "order block, fair value gap, liquidity sweep, break of structure, supply zone, demand zone, breakout, trendline). "
+    "If nothing is marked, null. Do not name a pattern from candle shapes alone. "
     "Confidence is 0 to 1 for each field. Use a low score when the value is blurry, cropped, or only partly visible. "
     "notes: short plain text about anything unclear. Use an empty string if there is nothing to say."
 )
@@ -178,12 +187,12 @@ def normalize_timeframe(text):
         return None, None
     raw = str(text).strip()
     low = raw.lower().replace(" ", "")
-    if low in ("15m", "30m", "1h", "4h"):
+    if low in SIMILAR_TFS:
         return low, low
     key = compact(raw)
     canon = TF_CANON.get(key)
     if canon:
-        return canon, canon
+        return canon, (canon if canon in SIMILAR_TFS else None)
     return _clean_text(raw, 24), None
 
 
@@ -254,7 +263,7 @@ def match_market(name, markets):
 def _confidence(raw, present):
     src = raw if isinstance(raw, dict) else {}
     out = {}
-    for k in ("symbol", "side", "timeframe", "entry", "take_profit", "stop_loss"):
+    for k in ("symbol", "side", "pattern", "timeframe", "entry", "take_profit", "stop_loss"):
         try:
             v = float(src[k]) if src.get(k) is not None and src.get(k) != "" else None
         except (TypeError, ValueError):
@@ -284,9 +293,11 @@ def parse_vision_payload(raw):
     entry = clean_price(raw.get("entry"))
     tp = clean_price(raw.get("take_profit") if raw.get("take_profit") is not None else raw.get("tp"))
     sl = clean_price(raw.get("stop_loss") if raw.get("stop_loss") is not None else raw.get("sl"))
+    pattern = _clean_text(raw.get("pattern"), PATTERN_MAX) or None
     present = {
         "symbol": bool(symbol),
         "side": bool(side),
+        "pattern": bool(pattern),
         "timeframe": bool(tf_display),
         "entry": entry is not None,
         "take_profit": tp is not None,
@@ -296,7 +307,7 @@ def parse_vision_payload(raw):
         raise ScreenshotError("Couldn't read a trade setup from that chart. Try a clearer screenshot with the pair and entry, TP and SL visible.", 422)
     conf = _confidence(raw.get("confidence"), present)
     notes = _clean_text(raw.get("notes"), NOTES_MAX)
-    return dict(symbol=symbol, side=side, timeframe=tf_display, similar_tf=similar_tf,
+    return dict(symbol=symbol, side=side, pattern=pattern, timeframe=tf_display, similar_tf=similar_tf,
                 entry=entry, tp=tp, sl=sl, confidence=conf, notes=notes)
 
 
@@ -311,53 +322,111 @@ def market_row(m):
                 default_venue=m.get("default_venue", True))
 
 
+def conf_level(c):
+    if c is None:
+        return "none"
+    return "high" if c >= 0.85 else ("medium" if c >= LOW_CONFIDENCE else ("low" if c >= BLANK_BELOW else "very low"))
+
+
+def levels_consistent(side, entry, tp, sl):
+    """True / False when side and all three prices are known, else None."""
+    if side not in ("long", "short") or None in (entry, tp, sl):
+        return None
+    return (sl < entry < tp) if side == "long" else (tp < entry < sl)
+
+
 def build_response(parsed, markets, pattern=""):
-    market = match_market(parsed.get("symbol"), markets) if parsed.get("symbol") else None
+    """What the page fills in, and what it only suggests.
+
+    A value is filled in when it was read with confidence >= BLANK_BELOW; it is highlighted for checking when
+    under LOW_CONFIDENCE. Below BLANK_BELOW it is left blank and returned under `suggested`, so the trader has to
+    accept it on purpose. Levels that contradict the side are all highlighted. Nothing is ever made up."""
     conf = parsed["confidence"]
-    labels = {
-        "symbol": "market",
-        "side": "side",
-        "timeframe": "timeframe",
-        "entry": "entry",
-        "take_profit": "take profit",
-        "stop_loss": "stop loss",
-    }
-    values = {
-        "symbol": bool(market),
-        "side": parsed.get("side") is not None,
-        "timeframe": parsed.get("timeframe") is not None,
-        "entry": parsed.get("entry") is not None,
-        "take_profit": parsed.get("tp") is not None,
-        "stop_loss": parsed.get("sl") is not None,
-    }
-    # Timeframe is optional for running a test; do not list it as required-missing.
+    labels = {"symbol": "market", "side": "side", "pattern": "pattern", "timeframe": "timeframe",
+              "entry": "entry", "take_profit": "take profit", "stop_loss": "stop loss"}
+    raw_vals = {"symbol": parsed.get("symbol"), "side": parsed.get("side"), "pattern": parsed.get("pattern"),
+                "timeframe": parsed.get("timeframe"), "entry": parsed.get("entry"),
+                "take_profit": parsed.get("tp"), "stop_loss": parsed.get("sl")}
+    suggested, filled = {}, {}
+    for k, v in raw_vals.items():
+        if v is None:
+            continue
+        if conf.get(k, 0) < BLANK_BELOW:
+            suggested[k] = v
+        else:
+            filled[k] = v
+    market = match_market(filled.get("symbol"), markets) if filled.get("symbol") else None
+    sug_market = match_market(suggested.get("symbol"), markets) if suggested.get("symbol") else None
+    values = {k: (bool(market) if k == "symbol" else k in filled) for k in labels}
     required = ("symbol", "side", "entry", "take_profit", "stop_loss")
     missing = [labels[k] for k in required if not values[k]]
     low = [labels[k] for k in required if values[k] and conf.get(k, 0) < LOW_CONFIDENCE]
-    if parsed.get("timeframe") and conf.get("timeframe", 0) < LOW_CONFIDENCE:
+    if filled.get("timeframe") and conf.get("timeframe", 0) < LOW_CONFIDENCE:
         low.append("timeframe")
+    consistent = levels_consistent(filled.get("side"), filled.get("entry"), filled.get("take_profit"),
+                                   filled.get("stop_loss"))
+    if consistent is False:
+        for k in ("side", "entry", "take profit", "stop loss"):
+            if k not in low:
+                low.append(k)
+    # the trader's own pattern wins; a read pattern is only used when they gave none
+    use_pattern = pattern or (filled.get("pattern") if conf.get("pattern", 0) >= LOW_CONFIDENCE else "")
     review = "Review these fields before you run the test. CHRONOS does not start until you press Run test."
     if missing:
         review += " Missing: " + ", ".join(missing) + "."
     if low:
         review += " Check these (low confidence): " + ", ".join(low) + "."
-    if parsed.get("timeframe") and not parsed.get("similar_tf"):
-        review += f" Chart timeframe is {parsed['timeframe']}; the fingerprint is left at its default."
-    if parsed.get("symbol") and not market:
-        review += f" Could not match '{parsed['symbol']}' to an MFP market; pick one yourself."
+    if consistent is False:
+        review += " The levels do not match the side (for a long: stop below entry, target above). Fix them before running."
+    if suggested:
+        review += (" Some values were too unclear to fill in: " + ", ".join(labels[k] for k in suggested)
+                   + ". Use them only if they match your chart.")
+    tf = filled.get("timeframe")
+    if tf and not parsed.get("similar_tf"):
+        review += f" Chart timeframe is {tf}; the fingerprint is left at its default (15m to 4h are supported)."
+    if filled.get("symbol") and not market:
+        review += f" Could not match '{filled['symbol']}' to an MFP market; pick one yourself."
+    fields = []
+    for k in ("symbol", "side", "pattern", "timeframe", "entry", "take_profit", "stop_loss"):
+        v = raw_vals[k]
+        c = conf.get(k) if v is not None else None
+        if v is None:
+            action = "not found"
+        elif k in suggested:
+            action = "suggested"
+        elif k == "symbol" and not market:
+            action = "unmatched"
+        elif labels[k] in low:
+            action = "check"
+        else:
+            action = "filled"
+        shown = market["symbol"] if (k == "symbol" and market) else v
+        fields.append(dict(key=k, label=labels[k], value=shown, read_as=v, confidence=None if c is None else round(c, 2),
+                           level=conf_level(c), action=action))
+    sugg_out = {}
+    for k, v in suggested.items():
+        if k == "symbol":
+            sugg_out["market"] = market_row(sug_market) if sug_market else None
+            sugg_out["symbol_raw"] = v
+        else:
+            sugg_out[{"take_profit": "tp", "stop_loss": "sl"}.get(k, k)] = v
     return dict(
-        pattern=pattern,
+        pattern=use_pattern or "",
+        pattern_read=raw_vals["pattern"],
         market=market_row(market),
-        symbol_raw=parsed.get("symbol"),
-        side=parsed.get("side"),
-        timeframe=parsed.get("timeframe"),
-        similar_tf=parsed.get("similar_tf"),
-        entry=parsed.get("entry"),
-        tp=parsed.get("tp"),
-        sl=parsed.get("sl"),
+        symbol_raw=filled.get("symbol"),
+        side=filled.get("side"),
+        timeframe=tf,
+        similar_tf=parsed.get("similar_tf") if tf else None,
+        entry=filled.get("entry"),
+        tp=filled.get("take_profit"),
+        sl=filled.get("stop_loss"),
         confidence=conf,
         low_confidence=low,
         missing=missing,
+        suggested=sugg_out,
+        levels_consistent=consistent,
+        fields=fields,
         notes=parsed.get("notes") or "",
         review=review,
     )

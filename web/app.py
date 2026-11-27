@@ -255,6 +255,24 @@ def parse_test_body(d, require_compare=False):
             raise ValueError("sl_buffer_atr must be between 0 and 10")
     else:
         slb = None
+    slip_unit = str(d.get("slippage_unit") or "bps").lower()
+    if slip_unit not in ("bps", "ticks"):
+        raise ValueError("slippage_unit must be 'bps' or 'ticks'")
+    slip_raw = d.get("slippage")
+    if slip_raw is None:
+        slip_raw = d.get("slippage_bps")
+    if slip_raw in (None, ""):
+        slip = tester.DEFAULT_SLIPPAGE_BPS if slip_unit == "bps" else 0.0
+    else:
+        try:
+            slip = float(slip_raw)
+        except (TypeError, ValueError):
+            raise ValueError("slippage must be a number")
+        if slip != slip or slip < 0 or slip > (100 if slip_unit == "bps" else 1000):
+            raise ValueError("slippage must be 0 to 100 bps, or 0 to 1000 ticks")
+    allow_overlap = bool(d.get("allow_overlap"))
+    if allow_overlap and mode == "pattern":
+        raise ValueError("'Allow overlapping trades' works with Similar moments and Every 4h close, not Pattern only")
     m = resolve(market)
     compare = d.get("compare")
     extras = []
@@ -276,7 +294,8 @@ def parse_test_body(d, require_compare=False):
     return dict(market=m, side=side, entry=entry, tp=tp, sl=sl, days=days, expiry=expiry,
                 trend=trend, mode=mode, zone_tf=zone_tf, entry_style=entry_style,
                 similar_tf=similar_tf, similar_bars=similar_bars, similar_k=similar_k,
-                want_insights=want_insights, slb=slb, extras=extras)
+                want_insights=want_insights, slb=slb, extras=extras,
+                slip_unit=slip_unit, slip=slip, allow_overlap=allow_overlap)
 
 
 def engine_cmd(p, json_path, compare=False):
@@ -293,6 +312,12 @@ def engine_cmd(p, json_path, compare=False):
                 "--similar-bars", str(p["similar_bars"]), "--similar-k", str(p["similar_k"])]
     else:
         cmd += ["--expiry", p["expiry"]]
+    if p.get("slip_unit") == "ticks" and p.get("slip"):
+        cmd += [f"--slippage-ticks={p['slip']!r}"]
+    else:
+        cmd += [f"--slippage-bps={p.get('slip', tester.DEFAULT_SLIPPAGE_BPS)!r}"]
+    if p.get("allow_overlap"):
+        cmd += ["--allow-overlap"]
     if compare:
         cmd += ["--compare", ",".join(x["market_id"] for x in p["extras"])]
     elif p["want_insights"]:

@@ -68,10 +68,18 @@ function loadPrice() {
 $("side").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
   side = b.dataset.side;
+  if (e.isTrusted) $("side").classList.remove("unsure");
   [...$("side").children].forEach(x => x.classList.toggle("on", x === b));
   updateRR();
 });
+const MODE_HELP = {
+  similar: "Finds past moments whose price action looked like your chart, then replays your trade there.",
+  "every-close": "Places your trade shape at every 4h candle close (one at a time). Tests the distances, not the reason for the trade.",
+  pattern: "Only trades retests of supply or demand zones found by fixed rules. Optional; not how most ICT or SMC setups are tested.",
+};
 function syncMode() {
+  if ($("mode-help")) $("mode-help").textContent = MODE_HELP[mode] || "";
+  if ($("overlap-row")) { $("overlap-row").hidden = mode === "pattern"; if (mode === "pattern") $("overlap").checked = false; }
   $("pattern-opts").hidden = mode !== "pattern";
   $("style-opts").hidden = mode !== "pattern";
   if ($("similar-opts")) $("similar-opts").hidden = mode !== "similar";
@@ -187,8 +195,12 @@ function syncShotFromInput() {
   const f = inp && inp.files && inp.files[0];
   if (f) setShotFile(f);
 }
+const SHOT_FIELD_IDS = { symbol: "market", entry: "entry", take_profit: "tp", stop_loss: "sl", timeframe: "similar-tf" };
+const LEVEL_TXT = { high: "High", medium: "Medium", low: "Low", "very low": "Very low", none: "-" };
+const ACTION_TXT = { filled: "Filled in", check: "Filled in, check it", suggested: "Not filled in: too unclear", "not found": "Not found", unmatched: "No matching market" };
 function applyShot(j) {
   clearUnsure();
+  $("side").classList.remove("unsure");
   const low = new Set(j.low_confidence || []);
   const missing = new Set(j.missing || []);
   if (j.pattern) $("shot-pattern").value = j.pattern;
@@ -210,6 +222,7 @@ function applyShot(j) {
     const b = $("side").querySelector("[data-side=" + j.side + "]");
     if (b) b.click();
   }
+  $("side").classList.toggle("unsure", low.has("side") || missing.has("side"));
   $("entry").value = ""; $("tp").value = ""; $("sl").value = "";
   if (j.entry != null) $("entry").value = j.entry;
   if (j.tp != null) $("tp").value = j.tp;
@@ -218,16 +231,41 @@ function applyShot(j) {
   markUnsure("tp", low.has("take profit") || missing.has("take profit"));
   markUnsure("sl", low.has("stop loss") || missing.has("stop loss"));
   if (j.similar_tf && $("similar-tf")) {
+    if (mode !== "similar") $("mode").querySelector('[data-mode="similar"]').click();
     $("similar-tf").value = j.similar_tf;
     markUnsure("similar-tf", low.has("timeframe"));
   }
   updateRR();
   const box = $("shot-review");
-  const bits = [j.review || "Review these fields before you run the test. CHRONOS does not start until you press Run test."];
-  if (j.notes) bits.push(j.notes);
-  box.textContent = bits.join(" ");
+  const fields = j.fields || [];
+  const sug = j.suggested || {};
+  const rows = fields.map(f => {
+    const val = f.value == null ? "-" : (typeof f.value === "number" ? px(f.value) : esc(f.value));
+    const conf = f.confidence == null ? "" : ` <span class="muted">${Math.round(f.confidence * 100)}%</span>`;
+    let act = esc(ACTION_TXT[f.action] || f.action);
+    const sk = { take_profit: "tp", stop_loss: "sl" }[f.key] || f.key;
+    if (f.action === "suggested" && ["entry", "take_profit", "stop_loss"].includes(f.key) && sug[sk] != null)
+      act += ` <button type="button" class="use-sug" data-field="${SHOT_FIELD_IDS[f.key]}" data-val="${sug[sk]}">Use ${px(sug[sk])}</button>`;
+    const cf = f.confidence == null ? "" : `<span class="cf">${LEVEL_TXT[f.level] || f.level}${conf}</span> · `;
+    return `<tr class="lv-${(f.level || "none").replace(" ", "-")} ac-${f.action.replace(" ", "-")}"><td>${esc(f.label)}</td><td class="v">${val}</td><td>${cf}${act}</td></tr>`;
+  }).join("");
+  const needs = (j.missing || []).length || (j.low_confidence || []).length || Object.keys(sug).length;
+  box.innerHTML = `<p>${esc(j.review || "Review these fields before you run the test.")}</p>` +
+    (rows ? `<div class="tbl-wrap sr-wrap"><table class="sr"><thead><tr><th>Field</th><th>Read as</th><th>Confidence · what CHRONOS did</th></tr></thead><tbody>${rows}</tbody></table></div>` : "") +
+    (j.notes ? `<p class="muted small">Note from the reader: ${esc(j.notes)}</p>` : "") +
+    (needs ? `<div class="sr-actions"><button type="button" class="btn-ghost sm" id="shot-ok">These look right</button><span class="muted small">Highlighted fields must be edited or confirmed before the test runs.</span></div>` : "");
   box.hidden = false;
-  box.className = "shot-review" + ((j.missing || []).length || (j.low_confidence || []).length ? "" : " ok");
+  box.className = "shot-review" + (needs ? "" : " ok");
+}
+function shotReviewClick(e) {
+  const u = e.target.closest(".use-sug");
+  if (u) { const el = $(u.dataset.field); if (el) { el.value = u.dataset.val; markUnsure(u.dataset.field, false); updateRR(); u.disabled = true; u.textContent = "Used"; } return; }
+  if (e.target.id === "shot-ok") {
+    ["market", "entry", "tp", "sl", "similar-tf"].forEach(id => markUnsure(id, false));
+    $("side").classList.remove("unsure");
+    e.target.disabled = true; e.target.textContent = "Confirmed";
+    showErr("");
+  }
 }
 async function readShot() {
   showShotErr("");
@@ -285,16 +323,28 @@ if ($("shot-panel")) {
   ["dragleave", "drop"].forEach(ev => $("shot-drop").addEventListener(ev, e => { e.preventDefault(); $("shot-drop").classList.remove("drag"); }));
   $("shot-drop").addEventListener("drop", e => { const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (f) setShotFile(f); });
   $("shot-run").addEventListener("click", () => readShot());
+  $("shot-review").addEventListener("click", shotReviewClick);
   ["market", "entry", "tp", "sl", "similar-tf"].forEach(id => $(id) && $(id).addEventListener("input", () => markUnsure(id, false)));
 }
 
 // ---------- run
 $("f").addEventListener("submit", e => { e.preventDefault(); run(); });
 let hadResult = false;
+let busyTimer = null, busyT0 = 0;
+const BUSY_STEPS = [[0, "Loading price history for this market..."], [4, "Finding past setups and replaying each trade candle by candle..."],
+  [15, "Still working. The first run on a market downloads its history, which can take up to a minute."],
+  [60, "Taking longer than usual. The price data source may be slow; CHRONOS keeps retrying for a while."]];
+function tickBusy() {
+  const s = Math.floor((Date.now() - busyT0) / 1000);
+  let txt = BUSY_STEPS[0][1]; BUSY_STEPS.forEach(([t, m]) => { if (s >= t) txt = m; });
+  $("skel-txt").textContent = txt; $("skel-time").textContent = s + "s";
+}
 function setBusy(b) {
   $("run").disabled = b; $("run").querySelector(".spin").hidden = !b;
   $("run").querySelector(".txt").textContent = b ? "Running backtest..." : "Run test";
   $("skel").hidden = !b;
+  clearInterval(busyTimer); busyTimer = null;
+  if (b) { busyT0 = Date.now(); tickBusy(); busyTimer = setInterval(tickBusy, 1000); $("res-err").hidden = true; }
   if (b) { $("empty").hidden = true; $("res").hidden = true; }
   else if (!hadResult) $("empty").hidden = false; else $("res").hidden = false;
   if (b && window.matchMedia("(max-width: 980px)").matches) $("results").scrollIntoView({ behavior: "smooth", block: "start" });
@@ -307,6 +357,20 @@ function toast(msg, title) {
   $("toasts").appendChild(t); setTimeout(() => t.remove(), 9000);
 }
 function showErr(msg) { $("form-err").hidden = !msg; $("form-err").textContent = msg || ""; }
+function errKind(msg, status) {
+  const m = (msg || "").toLowerCase();
+  if (status === 503 || status === 504 || /busy|unavailable|timed out|source/.test(m))
+    return ["Market data is unavailable right now", "The price feed (and its backups) did not answer in time. Nothing was calculated, so there is no partial result. Wait a minute and try again; a cached market is usually fast."];
+  if (/not enough|history|candles/.test(m))
+    return ["Not enough price history", "CHRONOS will not fill in missing candles or guess results. Try a market with longer history or a shorter test window."];
+  if (status === 429) return ["Too many tests at once", "Wait a few seconds, then try again."];
+  return ["The test could not run", "Check the market and levels, then try again."];
+}
+function showResErr(msg, status) {
+  const [h, hint] = errKind(msg, status);
+  $("res-err-h").textContent = h; $("res-err-msg").textContent = msg; $("res-err-hint").textContent = hint;
+  $("res-err").hidden = false; $("empty").hidden = true; $("res").hidden = true;
+}
 async function run() {
   showErr("");
   const mk = chosen ? chosen.market_id : $("market").value.trim();
@@ -314,9 +378,14 @@ async function run() {
   const le = levelError();
   if (le === null) return showErr("Enter entry, TP and SL.");
   if (le) return showErr(le);
+  const unsure = ["market", "entry", "tp", "sl"].filter(id => $(id).classList.contains("unsure"));
+  if (unsure.length) return showErr("Check the highlighted fields from the screenshot first. Edit them, or press \"These look right\" under the screenshot.");
+  const slip = $("slip").value === "" ? 0 : +$("slip").value;
+  if (!(slip >= 0) || slip > ($("slip-unit").value === "ticks" ? 1000 : 100)) return showErr("Slippage must be 0 to 100 bps (or 0 to 1000 ticks).");
   const body = { market: mk, side, entry: +$("entry").value, tp: +$("tp").value, sl: +$("sl").value,
     days: +$("days").value, expiry: $("expiry").value, trend_filter: $("trend").checked, mode,
-    insights: mode === "similar" ? false : $("insights").checked };
+    insights: mode === "similar" ? false : $("insights").checked,
+    slippage: slip, slippage_unit: $("slip-unit").value, allow_overlap: mode !== "pattern" && $("overlap").checked };
   const pat = (($("shot-pattern") && $("shot-pattern").value) || setupPattern || "").trim();
   if (pat) body.pattern = pat;
   if (mode === "pattern") { body.zone_tf = $("zone-tf").value; body.entry_style = $("entry-style").value; if ($("sl-buf").value !== "") body.sl_buffer_atr = +$("sl-buf").value; }
@@ -327,12 +396,15 @@ async function run() {
   lastRequest = body;
   setBusy(true);
   try {
-    const r = await fetch("/api/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const j = await r.json().catch(() => ({ error: "Server returned an invalid response (" + r.status + ")" }));
-    if (!r.ok || j.error) throw new Error(j.error || ("HTTP " + r.status));
+    let r, j;
+    try {
+      r = await fetch("/api/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    } catch (e) { throw Object.assign(new Error("Could not reach CHRONOS. Check your connection and try again."), { status: 0 }); }
+    j = await r.json().catch(() => ({ error: "Server returned an invalid response (" + r.status + ")" }));
+    if (!r.ok || j.error) throw Object.assign(new Error(j.error || ("HTTP " + r.status)), { status: r.status });
     render(j);
-  } catch (err) { showErr(err.message); toast(err.message); }
-  finally { setBusy(false); }
+  } catch (err) { setBusy(false); showResErr(err.message, err.status); toast(err.message); return; }
+  finally { if (busyTimer) setBusy(false); }
 }
 
 // ---------- render
@@ -377,30 +449,123 @@ function render(o) {
   if (s.shallow_sweep_pct_of_losses && s.sl >= 5 && s.shallow_sweep_pct_of_losses >= 0.2) warns.push("Stop looks too tight: a good share of losers wicked through the stop before the move reached TP.");
   if (p.trend_filter) warns.push(`Trend filter skipped ${o.skipped_by_trend} eligible 4h closes. 4h trend now: ${o.trend_now || "n/a"}.`);
   $("warn").hidden = !warns.length; $("warn").innerHTML = warns.join("<br>");
-  const wrCls = s.win_rate == null ? "" : (s.win_rate > s.breakeven_win_rate ? "pos" : "neg");
+  const st = o.stats;
   const zcard = pat && o.zones ? [card("Patterns found", o.zones.zones_found,
     `${p.zone_tf} ${g.side === "short" ? "supply" : "demand"} areas · touched ${o.zones.zones_touched} · broken ${o.zones.zones_invalidated} · traded ${o.zones.zones_traded}`)] : [];
   const scard = sim && o.similar_matches ? [card("Similar windows", o.similar_matches.filter(x => !x.skipped).length,
     `up to ${p.similar_k || 30} non-overlapping matches on ${p.similar_tf || "1h"}`)] : [];
-  $("cards").innerHTML = [...zcard, ...scard,
-    card("Orders", s.placed, `filled ${s.fills} · unfilled ${s.unfilled}${s.open_at_end ? ` · open ${s.open_at_end}` : ""}`),
-    card("Closed trades", s.closed, `TP ${s.tp} · SL ${s.sl}${s.time_exits ? ` · time ${s.time_exits}` : ""}`),
-    card("Win rate", pct(s.win_rate), `break-even ${pct(s.breakeven_win_rate)} after fees (${pct(s.breakeven_win_rate_gross)} before)`, wrCls),
-    card("Avg R per trade", sgnR(s.avg_r_net), `gross ${sgnR(s.avg_r_gross)} · per order ${sgnR(s.expectancy_r_per_order)}`, s.avg_r_net > 0 ? "pos" : s.avg_r_net < 0 ? "neg" : ""),
-    card("Total R", sgnR(s.total_r_net), `t-stat ${s.t_stat}`, s.total_r_net > 0 ? "pos" : s.total_r_net < 0 ? "neg" : ""),
-    card("Max losing streak", s.max_losing_streak, `halves ${s.first_half_avg_r ?? "n/a"} / ${s.second_half_avg_r ?? "n/a"} R avg`),
-    card("Max drawdown", (s.max_drawdown_r || 0).toFixed(2) + "R", "peak to trough, in R", s.max_drawdown_r < 0 ? "neg" : ""),
-    card("Stop-sweep check", `${s.sl_then_tp} / ${s.sl}`, `stop-outs that still reached TP within ${p.sweep_window}; ${s.shallow_sweeps} only poked ${p.sweep_atr} ATR or less past SL`),
-  ].join("");
+  if (st) {
+    const n = st.net, gr = st.gross, cl = v => v == null ? "" : v > 0 ? "pos" : v < 0 ? "neg" : "";
+    const pfTxt = b => b.profit_factor != null ? Number(b.profit_factor).toFixed(2) : (b.profit_factor_infinite ? "no losses" : "n/a");
+    const hrs = h => h == null ? "-" : h >= 48 ? (h / 24).toFixed(1) + "d" : Number(h).toFixed(1) + "h";
+    const rr = b => b.avg_rr_achieved == null ? "n/a" : "1:" + Number(b.avg_rr_achieved).toFixed(2);
+    $("cards").innerHTML = [
+      card("Setups identified", st.setups_identified, esc(st.setups_basis)),
+      card("Trades executed", st.trades_executed, `of ${st.orders_placed} orders · unfilled ${st.unfilled}${st.open_at_end ? ` · still open ${st.open_at_end}` : ""}`),
+      card("Wins / losses", `${n.wins} / ${n.losses}`, `${st.closed} closed${n.flat ? ` · ${n.flat} flat` : ""} · theoretical ${gr.wins} / ${gr.losses}`),
+      card("Win rate", pct(n.win_rate), `break-even ${pct(s.breakeven_win_rate)} · theoretical ${pct(gr.win_rate)}`, n.win_rate == null ? "" : (n.win_rate > s.breakeven_win_rate ? "pos" : "neg")),
+      card("Net P/L", sgnR(n.total_r), `${sgnPct(n.total_pct)} at ${st.risk_pct_per_trade}% risk per trade · theoretical ${sgnR(gr.total_r)}`, cl(n.total_r)),
+      card("Profit factor", pfTxt(n), `theoretical ${pfTxt(gr)} · above 1 = made money`, n.profit_factor == null ? "" : (n.profit_factor > 1 ? "pos" : "neg")),
+      card("Max drawdown", (n.max_drawdown_r || 0).toFixed(2) + "R", `${sgnPct(n.max_drawdown_pct)} at ${st.risk_pct_per_trade}% risk · theoretical ${(gr.max_drawdown_r || 0).toFixed(2)}R`, n.max_drawdown_r < 0 ? "neg" : ""),
+      card("Expectancy", sgnR(n.expectancy_r), `average result per trade · theoretical ${sgnR(gr.expectancy_r)}`, cl(n.expectancy_r)),
+      card("Avg R:R achieved", rr(n), `avg win ÷ avg loss · theoretical ${rr(gr)}`),
+      card("Avg win / avg loss", `${sgnR(n.avg_win_r)} / ${sgnR(n.avg_loss_r)}`, `theoretical ${sgnR(gr.avg_win_r)} / ${sgnR(gr.avg_loss_r)}`),
+      card("Longest streaks", `${n.longest_win_streak}W / ${n.longest_loss_streak}L`, "wins and losses in a row"),
+      card("Avg time in trade", hrs(st.duration_h.avg), `winners ${hrs(st.duration_h.avg_win)} · losers ${hrs(st.duration_h.avg_loss)}`),
+      ...zcard, ...scard,
+      card("Stop-sweep check", `${s.sl_then_tp} / ${s.sl}`, `stop-outs that still reached TP within ${p.sweep_window}`),
+    ].join("");
+    renderGvn(st, o);
+    renderWhy(st.why || []);
+    renderOutcomes(st);
+    renderMonthly(st.monthly || []);
+  } else {
+    $("cards").innerHTML = [...zcard, ...scard,
+      card("Orders", s.placed, `filled ${s.fills} · unfilled ${s.unfilled}`),
+      card("Closed trades", s.closed, `TP ${s.tp} · SL ${s.sl}`),
+      card("Win rate", pct(s.win_rate), `break-even ${pct(s.breakeven_win_rate)}`),
+      card("Avg R per trade", sgnR(s.avg_r_net), `gross ${sgnR(s.avg_r_gross)}`),
+      card("Total R", sgnR(s.total_r_net), ""),
+      card("Max drawdown", (s.max_drawdown_r || 0).toFixed(2) + "R", "")].join("");
+  }
+  ["gvn-panel", "why-panel"].forEach(id => $(id).hidden = !st);
+  renderDQ(o.data_quality);
+  const slipTxt = o.costs && o.costs.slippage ? o.costs.slippage.text : "none";
   $("meta").textContent = `Fees: ${o.fees.commission_pct_per_fill}% per fill + ${o.fees.swap_pct_per_day}%/day swap (${o.fees.asset_class}, MFP standard). ` +
-    `Tie rule: ${p.tie_rule}. Placement: ${p.placement}. Generated ${o.generated.replace("T", " ").replace("Z", " UTC")}` + (o.elapsed_s != null ? `, ran in ${o.elapsed_s}s.` : ".");
+    `Slippage: ${slipTxt} (${p.slippage_rule || "market-type fills"}). ` +
+    `${p.one_at_a_time === false ? "Overlapping trades allowed." : "One order or trade at a time."} ` +
+    `Tie rule: ${p.tie_rule}. Look-ahead: ${p.lookahead_rule || "only closed candles are used"}. Placement: ${p.placement}. ` +
+    `Generated ${o.generated.replace("T", " ").replace("Z", " UTC")}` + (o.elapsed_s != null ? `, ran in ${o.elapsed_s}s.` : ".");
   renderProvenance(o.data);
   renderInsights(o.insights);
   renderSimilarMatches(o);
+  tradeSort = { key: null, dir: 1 };
   renderTrades(o.trades || [], p.mode);
-  drawChart(o.trades || []);
+  drawChart(o);
+  drawHist(o);
   setupCompare(o);
   setupScan(o);
+}
+const sgnPct = x => x == null ? "-" : (x > 0 ? "+" : "") + Number(x).toFixed(1) + "%";
+function renderDQ(dq) {
+  const el = $("dq");
+  if (!dq || dq.status === "ok" || !(dq.messages || []).length) { el.hidden = true; return; }
+  el.hidden = false;
+  el.className = "dq " + (dq.status === "insufficient" ? "bad" : "warn");
+  const h = dq.status === "insufficient" ? "Not enough data for a verdict" : "Check the data behind this result";
+  el.innerHTML = `<b>${h}</b><ul>${dq.messages.map(m => `<li>${esc(m)}</li>`).join("")}</ul>`;
+}
+function renderGvn(st, o) {
+  const g = st.gross, n = st.net;
+  const f2 = x => x == null ? "n/a" : Number(x).toFixed(2);
+  const pf = b => b.profit_factor != null ? f2(b.profit_factor) : (b.profit_factor_infinite ? "no losses" : "n/a");
+  const rows = [
+    ["Closed trades", g.trades, n.trades],
+    ["Wins / losses", `${g.wins} / ${g.losses}`, `${n.wins} / ${n.losses}`],
+    ["Win rate", pct(g.win_rate), pct(n.win_rate)],
+    ["Net result", sgnR(g.total_r), sgnR(n.total_r), true],
+    ["Return at " + st.risk_pct_per_trade + "% risk/trade", sgnPct(g.total_pct), sgnPct(n.total_pct), true],
+    ["Profit factor", pf(g), pf(n)],
+    ["Expectancy per trade", sgnR(g.expectancy_r), sgnR(n.expectancy_r), true],
+    ["Average win", sgnR(g.avg_win_r), sgnR(n.avg_win_r)],
+    ["Average loss", sgnR(g.avg_loss_r), sgnR(n.avg_loss_r)],
+    ["Avg R:R achieved", g.avg_rr_achieved == null ? "n/a" : "1:" + f2(g.avg_rr_achieved), n.avg_rr_achieved == null ? "n/a" : "1:" + f2(n.avg_rr_achieved)],
+    ["Max drawdown", f2(g.max_drawdown_r) + "R", f2(n.max_drawdown_r) + "R"],
+    ["Longest win / loss streak", `${g.longest_win_streak} / ${g.longest_loss_streak}`, `${n.longest_win_streak} / ${n.longest_loss_streak}`],
+    ["t-stat", g.t_stat == null ? "n/a" : f2(g.t_stat), n.t_stat == null ? "n/a" : f2(n.t_stat)],
+  ];
+  const num = v => parseFloat(String(v).replace(/[^0-9.+-]/g, ""));
+  $("gvn").querySelector("tbody").innerHTML = rows.map(([k, a, b, c]) => {
+    const ca = c ? (num(a) > 0 ? "pos" : num(a) < 0 ? "neg" : "") : "", cb = c ? (num(b) > 0 ? "pos" : num(b) < 0 ? "neg" : "") : "";
+    return `<tr><td>${k}</td><td class="r ${ca}">${a}</td><td class="r ${cb}">${b}</td></tr>`;
+  }).join("");
+  const c = st.costs;
+  $("gvn-note").textContent = `${st.closed} closed trades`;
+  $("cost-line").innerHTML = st.closed ? `Costs took <b>${Number(c.total_r).toFixed(2)}R</b> in total: fees and swap ${Number(c.fees_r).toFixed(2)}R, slippage ${Number(c.slippage_r).toFixed(2)}R` +
+    ` (${Number(c.per_trade_r).toFixed(3)}R per trade` + (c.share_of_gross_profit != null ? `, ${(c.share_of_gross_profit * 100).toFixed(0)}% of the theoretical profit` : "") + `).` : "";
+}
+function renderWhy(list) {
+  const icon = { good: "+", warn: "!", info: "i" };
+  $("why-list").innerHTML = list.length ? list.map(f => `<li class="${f.level}"><span class="wi" aria-hidden="true">${icon[f.level] || "i"}</span><div><b>${esc(f.title)}</b><span>${esc(f.text)}</span></div></li>`).join("")
+    : `<li class="info"><span class="wi">i</span><div><b>Nothing stands out</b><span>No rule tripped on these trades.</span></div></li>`;
+}
+function renderOutcomes(st) {
+  const parts = [["tp", "Take profit", st.exits.tp], ["sl", "Stop loss", st.exits.sl], ["time", "Time exit", st.exits.time],
+    ["unf", "Unfilled", st.unfilled], ["open", "Still open", st.open_at_end]];
+  const tot = parts.reduce((a, x) => a + x[2], 0) || 1;
+  $("outbar").innerHTML = parts.filter(x => x[2]).map(([k, l, v]) => `<span class="ob ${k}" style="flex:${v}" title="${l}: ${v}"></span>`).join("") || `<span class="ob unf" style="flex:1"></span>`;
+  $("outleg").innerHTML = parts.map(([k, l, v]) => `<span><i class="ob ${k}"></i>${l} <b>${v}</b> <span class="muted">${Math.round(v / tot * 100)}%</span></span>`).join("");
+  $("out-note").textContent = `${st.orders_placed} orders`;
+}
+function renderMonthly(rows) {
+  const el = $("monthly");
+  if (!rows.length) { el.innerHTML = `<p class="muted small">No closed trades.</p>`; return; }
+  const mx = Math.max(...rows.map(r => Math.abs(r.r_net)), 0.5);
+  el.innerHTML = rows.map(r => {
+    const w = Math.abs(r.r_net) / mx * 50, neg = r.r_net < 0;
+    const [y, m] = r.month.split("-");
+    return `<div class="mrow"><span class="ml">${MON[+m - 1]} ${y.slice(2)}</span><span class="mbar"><i class="${neg ? "neg" : "pos"}" style="${neg ? `right:50%;width:${w}%` : `left:50%;width:${w}%`}"></i></span><span class="mv ${neg ? "neg" : "pos"}">${sgnR(r.r_net)}</span><span class="mn muted">${r.trades}</span></div>`;
+  }).join("");
 }
 function renderProvenance(d) {
   const el = $("provenance");
@@ -437,37 +602,105 @@ function renderInsights(ins) {
   $("ins-fixes").innerHTML = fx.map(f => `<li>${esc(f.fix)}${f.evidence.length ? `<ul>${f.evidence.map(e => `<li class="ev">Tested: ${esc(e)}</li>`).join("")}</ul>` : ""}</li>`).join("");
   $("ins-disc").textContent = ins.disclaimer;
 }
+let tradeSort = { key: null, dir: 1 }, tradeRows = [], tradeMode = "similar";
+const EXIT_LBL = { tp: "Take profit", sl: "Stop loss", sl_gap_open: "Stop (gap, filled at open)", time_stop: "Time stop" };
+const STATUS_LBL = { tp: "TP", sl: "SL", time: "Time exit", unfilled: "Unfilled", open_at_end: "Open", pending_at_end: "Pending" };
+function srcLabel(s) { if (!s) return "-"; const k = s.split(":")[0]; return ({ mfp: "MFP", okx: "OKX", bybit: "Bybit", yahoo: "Yahoo", dukascopy: "Dukascopy", hyperliquid: "Hyperliquid" })[k] || k; }
+function durTxt(h) { if (h == null) return "-"; if (h < 1) return Math.round(h * 60) + "m"; if (h < 48) return h.toFixed(1) + "h"; return (h / 24).toFixed(1) + "d"; }
+const TRADE_COLS = [
+  { k: "i", t: "#", v: r => r.i },
+  { k: "placed", t: "Signal (WAT)", v: r => r.t.placed || 0, f: r => wat(r.t.placed) },
+  { k: "ctx", t: "Context", v: r => r.ctxv, f: r => r.ctx },
+  { k: "filled", t: "Entry time", v: r => r.t.filled || 0, f: r => r.t.filled ? wat(r.t.filled) : "-" },
+  { k: "entry", t: "Entry", v: r => r.t.fill_px ?? r.t.entry ?? 0, f: r => px(r.t.fill_px ?? r.t.entry), r: 1 },
+  { k: "sl", t: "SL", v: r => r.t.sl ?? 0, f: r => px(r.t.sl), r: 1 },
+  { k: "tp", t: "TP", v: r => r.t.tp ?? 0, f: r => px(r.t.tp), r: 1 },
+  { k: "exit", t: "Exit time", v: r => r.t.exit || 0, f: r => r.t.exit ? wat(r.t.exit) : "-" },
+  { k: "exit_px", t: "Exit", v: r => r.t.exit_px ?? 0, f: r => px(r.t.exit_px), r: 1 },
+  { k: "status", t: "Result", v: r => r.t.status, f: r => {
+      const st = r.t.status, tag = st === "tp" ? "tp" : st === "sl" ? "sl" : st === "time" ? "time" : "unf";
+      const extra = (r.t.same_bar_tp_sl ? ` <span class="muted" title="TP and SL both inside one candle: counted as a loss">tie</span>` : "") +
+        (r.t.exit_reason === "sl_gap_open" ? ` <span class="muted" title="Price gapped through the stop; exit at the gap open">gap</span>` : "") +
+        (r.t.gap_bars_in_trade ? ` <span class="muted" title="${r.t.gap_bars_in_trade} candles missing while this trade was open">data hole</span>` : "") +
+        (st === "sl" && r.t.sl_then_tp ? ` <span class="muted" title="Price still reached TP after the stop-out">swept</span>` : "");
+      return `<span class="tag ${tag}" title="${esc(EXIT_LBL[r.t.exit_reason] || STATUS_LBL[st] || st)}">${STATUS_LBL[st] || st}</span>${extra}`; } },
+  { k: "r_gross", t: "R theor.", v: r => r.t.r_gross ?? -1e9, f: r => r.t.r_gross == null ? "" : `<span class="${r.t.r_gross > 0 ? "pos" : "neg"}">${sgnR(r.t.r_gross)}</span>`, r: 1 },
+  { k: "r_net", t: "R net", v: r => r.t.r_net ?? -1e9, f: r => r.t.r_net == null ? "" : `<b class="${r.t.r_net > 0 ? "pos" : "neg"}">${sgnR(r.t.r_net)}</b>`, r: 1 },
+  { k: "hours", t: "Duration", v: r => r.t.hours ?? -1, f: r => durTxt(r.t.hours), r: 1 },
+  { k: "source", t: "Candles", v: r => r.t.source || "", f: r => `<span class="muted">${srcLabel(r.t.source)} ${r.t.interval || ""}</span>` },
+];
 function renderTrades(tr, md) {
-  const mid = $("trades-head");
-  if (mid) {
-    const col = md === "pattern" ? "Near / far edge" : md === "similar" ? "Score" : "Context";
-    mid.innerHTML = `<th>#</th><th>Placed (WAT)</th><th>${col}</th><th>Filled (WAT)</th><th>Entry</th><th>Exit (WAT)</th><th>Exit price</th><th>Result</th><th class="r">R</th>`;
-  }
-  const rows = tr.map((t, i) => {
-    const st = t.status, tag = st === "tp" ? "tp" : st === "sl" ? "sl" : st === "time" ? "time" : "unf";
-    const lbl = { tp: "TP", sl: "SL", time: "Time exit", unfilled: "Unfilled", open_at_end: "Open", pending_at_end: "Pending" }[st] || st;
-    const sweep = st === "sl" && t.sl_then_tp ? ` <span class="muted" title="Price still reached TP after the stop-out">swept</span>` : "";
-    const r = t.r_net == null ? "" : `<span class="${t.r_net > 0 ? "pos" : "neg"}">${sgnR(t.r_net)}</span>`;
-    let ctx = "-";
-    if (md === "similar" && t.similar_score != null) ctx = Number(t.similar_score).toFixed(1);
-    else if (t.zone_proximal != null) ctx = `${px(t.zone_proximal)} / ${px(t.zone_distal)}`;
-    return `<tr><td>${i + 1}</td><td>${wat(t.placed)}</td><td>${ctx}</td><td>${t.filled ? wat(t.filled) : "-"}</td><td>${px(t.fill_px ?? t.entry)}</td>
-      <td>${t.exit ? wat(t.exit) : "-"}</td><td>${px(t.exit_px)}</td><td><span class="tag ${tag}">${lbl}</span>${sweep}</td><td class="r">${r}</td></tr>`;
+  tradeMode = md;
+  const col = md === "pattern" ? "Zone near / far" : md === "similar" ? "Similarity" : "Ref price";
+  tradeRows = tr.map((t, i) => {
+    let ctx = "-", ctxv = 0;
+    if (md === "similar" && t.similar_score != null) { ctx = Number(t.similar_score).toFixed(1); ctxv = t.similar_score; }
+    else if (t.zone_proximal != null) { ctx = `${px(t.zone_proximal)} / ${px(t.zone_distal)}`; ctxv = t.zone_proximal; }
+    else if (t.ref != null) { ctx = px(t.ref); ctxv = t.ref; }
+    return { i: i + 1, t, ctx, ctxv };
   });
-  $("trades").querySelector("tbody").innerHTML = rows.join("") || `<tr><td colspan="9" class="muted">No orders were placed in the window.</td></tr>`;
-  $("t-count").textContent = `${tr.length} orders, times in WAT (UTC+1)`;
+  TRADE_COLS[2].t = col;
+  drawTrades();
 }
-function drawChart(tr) {
-  const cv = $("chart"), dpr = window.devicePixelRatio || 1;
-  const W = cv.clientWidth, H = 260; cv.width = W * dpr; cv.height = H * dpr;
+function drawTrades() {
+  const closedOnly = $("t-closed") && $("t-closed").checked;
+  let rows = tradeRows.filter(r => !closedOnly || ["tp", "sl", "time"].includes(r.t.status));
+  if (tradeSort.key) {
+    const c = TRADE_COLS.find(x => x.k === tradeSort.key);
+    rows = rows.slice().sort((a, b) => { const x = c.v(a), y = c.v(b); return (x < y ? -1 : x > y ? 1 : a.i - b.i) * tradeSort.dir; });
+  }
+  $("trades-head").innerHTML = TRADE_COLS.map(c => {
+    const on = tradeSort.key === c.k, arrow = on ? (tradeSort.dir > 0 ? " ▲" : " ▼") : "";
+    return `<th class="${c.r ? "r " : ""}sortable${on ? " on" : ""}" data-k="${c.k}" tabindex="0" aria-sort="${on ? (tradeSort.dir > 0 ? "ascending" : "descending") : "none"}">${c.t}${arrow}</th>`;
+  }).join("");
+  $("trades").querySelector("tbody").innerHTML = rows.map(r => `<tr>${TRADE_COLS.map(c => `<td class="${c.r ? "r" : ""}">${c.f ? c.f(r) : c.v(r)}</td>`).join("")}</tr>`).join("") ||
+    `<tr><td colspan="${TRADE_COLS.length}" class="muted">${closedOnly ? "No closed trades." : "No orders were placed in the window."}</td></tr>`;
+  const nClosed = tradeRows.filter(r => ["tp", "sl", "time"].includes(r.t.status)).length;
+  $("t-count").textContent = `${tradeRows.length} orders · ${nClosed} closed`;
+}
+$("trades").addEventListener("click", e => {
+  const th = e.target.closest("th[data-k]"); if (!th) return;
+  const k = th.dataset.k;
+  tradeSort = tradeSort.key === k ? { key: k, dir: -tradeSort.dir } : { key: k, dir: 1 };
+  drawTrades();
+});
+$("trades").addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && e.target.matches("th[data-k]")) { e.preventDefault(); e.target.click(); } });
+if ($("t-closed")) $("t-closed").addEventListener("change", drawTrades);
+function csvCell(v) { const s = v == null ? "" : String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }
+function tradesCsv(o) {
+  const iso = ms => ms ? new Date(ms).toISOString().replace(".000Z", "Z") : "";
+  const cols = ["n", "market", "side", "status", "exit_reason", "signal_utc", "entry_time_utc", "exit_time_utc", "entry_order", "entry_fill",
+    "entry_fill_theoretical", "stop_loss", "take_profit", "exit_price", "exit_price_theoretical", "r_theoretical", "r_slippage", "r_fees",
+    "r_net", "hours", "same_candle_tp_sl", "gap_candles_in_trade", "candle_interval", "candle_source", "similarity", "zone_near", "zone_far"];
+  const side = o.setup.side;
+  const lines = [cols.join(",")];
+  (o.trades || []).forEach((t, i) => lines.push([i + 1, t.market, side, t.status, t.exit_reason || "", iso(t.placed), iso(t.filled), iso(t.exit),
+    t.entry, t.fill_px, t.fill_px_theoretical, t.sl, t.tp, t.exit_px, t.exit_px_theoretical, t.r_gross, t.r_slip, t.r_fee, t.r_net, t.hours,
+    t.same_bar_tp_sl ? 1 : 0, t.gap_bars_in_trade || 0, t.interval, t.source, t.similar_score, t.zone_proximal, t.zone_distal].map(csvCell).join(",")));
+  return lines.join("\n") + "\n";
+}
+if ($("t-csv")) $("t-csv").addEventListener("click", () => {
+  if (!lastResult) return;
+  const o = lastResult, blob = new Blob([tradesCsv(o)], { type: "text/csv" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `chronos-${(o.market.market_id.split("|").pop() || "trades").replace(/[^A-Za-z0-9_-]/g, "")}-${o.setup.side}-${(o.params || {}).mode || "test"}.csv`;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+});
+function sizeCanvas(cv, H) {
+  const dpr = window.devicePixelRatio || 1, W = cv.clientWidth;
+  cv.width = W * dpr; cv.height = H * dpr;
   const c = cv.getContext("2d"); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, W, H);
-  const closed = tr.filter(t => ["tp", "sl", "time"].includes(t.status));
-  const pts = [{ x: 0, y: 0 }]; let eq = 0;
-  closed.forEach((t, i) => { eq += t.r_net; pts.push({ x: i + 1, y: eq, t }); });
-  const L = 46, R = 14, T = 12, B = 28, w = W - L - R, h = H - T - B;
+  return [c, W];
+}
+function drawChart(o) {
+  const cv = $("chart"), H = 260, [c, W] = sizeCanvas(cv, H);
+  const eqs = (o.stats && o.stats.equity) || [];
+  const pts = [{ x: 0, n: 0, g: 0 }].concat(eqs.map((e, i) => ({ x: i + 1, n: e.n, g: e.g, s: e.s, t: e.t })));
+  const L = 50, R = 14, T = 12, B = 28, w = W - L - R, h = H - T - B;
   c.font = "11px ui-monospace,Menlo,monospace"; c.fillStyle = "#8fa596";
-  if (closed.length === 0) { c.fillText("No closed trades to chart.", L, H / 2); return; }
-  let lo = Math.min(0, ...pts.map(p => p.y)), hi = Math.max(0, ...pts.map(p => p.y));
+  if (eqs.length === 0) { c.fillText("No closed trades to chart.", L, H / 2); return; }
+  let lo = Math.min(0, ...pts.map(p => Math.min(p.n, p.g))), hi = Math.max(0, ...pts.map(p => Math.max(p.n, p.g)));
   if (hi - lo < 1) { hi += .5; lo -= .5; }
   const padY = (hi - lo) * .08; lo -= padY; hi += padY;
   const X = x => L + (x / Math.max(1, pts.length - 1)) * w, Y = y => T + (hi - y) / (hi - lo) * h;
@@ -478,25 +711,52 @@ function drawChart(tr) {
     c.fillText((v > 0 ? "+" : "") + v.toFixed(stepR < 1 ? 1 : 0) + "R", 4, Y(v) + 4);
   }
   c.strokeStyle = "#2a5532"; c.setLineDash([4, 4]); c.beginPath(); c.moveTo(L, Y(0)); c.lineTo(W - R, Y(0)); c.stroke(); c.setLineDash([]);
+  // theoretical (gross): thin dashed, muted
+  c.beginPath(); pts.forEach((p, i) => i ? c.lineTo(X(p.x), Y(p.g)) : c.moveTo(X(p.x), Y(p.g)));
+  c.strokeStyle = "rgba(191,211,196,.55)"; c.lineWidth = 1.4; c.setLineDash([5, 4]); c.stroke(); c.setLineDash([]);
+  // after costs (net): filled area + solid line
   const col = "#5fd63a";
-  const top = Math.min(...pts.map(p => Y(p.y))), grd = c.createLinearGradient(0, top, 0, Y(0));
-  grd.addColorStop(0, "rgba(95,214,58,.18)"); grd.addColorStop(1, "rgba(95,214,58,0)");
-  const grdN = c.createLinearGradient(0, Y(0), 0, T + h); grdN.addColorStop(0, "rgba(95,214,58,0)"); grdN.addColorStop(1, "rgba(95,214,58,.09)");
-  c.beginPath(); pts.forEach((p, i) => i ? c.lineTo(X(p.x), Y(p.y)) : c.moveTo(X(p.x), Y(p.y)));
+  const top = Math.min(...pts.map(p => Y(p.n))), grd = c.createLinearGradient(0, top, 0, Y(0));
+  grd.addColorStop(0, "rgba(95,214,58,.16)"); grd.addColorStop(1, "rgba(95,214,58,0)");
+  c.beginPath(); pts.forEach((p, i) => i ? c.lineTo(X(p.x), Y(p.n)) : c.moveTo(X(p.x), Y(p.n)));
   c.lineTo(X(pts.length - 1), Y(0)); c.lineTo(X(0), Y(0)); c.closePath();
-  c.save(); c.clip(); c.fillStyle = grd; c.fillRect(L, T, w, Y(0) - T); c.fillStyle = grdN; c.fillRect(L, Y(0), w, T + h - Y(0)); c.restore();
-  c.beginPath(); pts.forEach((p, i) => i ? c.lineTo(X(p.x), Y(p.y)) : c.moveTo(X(p.x), Y(p.y)));
-  c.strokeStyle = col; c.lineWidth = 2.2; c.lineJoin = "round"; c.shadowColor = "rgba(95,214,58,.35)"; c.shadowBlur = 5; c.stroke(); c.shadowBlur = 0;
-  pts.slice(1).forEach(p => { c.beginPath(); c.arc(X(p.x), Y(p.y), 3, 0, 7);
-    c.fillStyle = p.t.status === "tp" ? "#3ddc84" : p.t.status === "sl" ? "#ff4d5e" : "#4cc22c"; c.fill();
-    c.strokeStyle = "#010a03"; c.lineWidth = 1.2; c.stroke(); });
+  c.save(); c.clip(); c.fillStyle = grd; c.fillRect(L, T, w, Math.max(0, Y(0) - T)); c.restore();
+  c.beginPath(); pts.forEach((p, i) => i ? c.lineTo(X(p.x), Y(p.n)) : c.moveTo(X(p.x), Y(p.n)));
+  c.strokeStyle = col; c.lineWidth = 2.2; c.lineJoin = "round"; c.stroke();
+  if (pts.length <= 160) pts.slice(1).forEach(p => { c.beginPath(); c.arc(X(p.x), Y(p.n), 2.6, 0, 7);
+    c.fillStyle = p.s === "tp" ? "#3ddc84" : p.s === "sl" ? "#ff4d5e" : "#4cc22c"; c.fill(); });
   c.fillStyle = "#8fa596";
   c.fillText("trade 1", L, H - 8);
-  const endLbl = `trade ${closed.length} · ${wat(closed[closed.length - 1].exit)} WAT`;
+  const endLbl = `trade ${eqs.length} · ${wat(eqs[eqs.length - 1].t)} WAT`;
   c.fillText(endLbl, W - R - c.measureText(endLbl).width, H - 8);
 }
+function drawHist(o) {
+  const cv = $("hist"); if (!cv) return;
+  const H = 200, [c, W] = sizeCanvas(cv, H);
+  const bins = (o.stats && o.stats.r_hist && o.stats.r_hist.net) || [];
+  c.font = "11px ui-monospace,Menlo,monospace"; c.fillStyle = "#8fa596";
+  const tot = bins.reduce((a, b) => a + b.count, 0);
+  if (!tot) { c.fillText("No closed trades.", 10, H / 2); return; }
+  const L = 8, R = 8, T = 18, B = 34, w = W - L - R, h = H - T - B, n = bins.length, bw = w / n;
+  const mx = Math.max(...bins.map(b => b.count));
+  bins.forEach((b, i) => {
+    const bh = b.count / mx * h, x = L + i * bw + 3, y = T + h - bh;
+    const neg = b.hi != null ? b.hi <= 0 : false;
+    c.fillStyle = neg ? "rgba(255,77,94,.75)" : "rgba(61,220,132,.8)";
+    c.fillRect(x, y, Math.max(2, bw - 6), bh);
+    c.fillStyle = "#bfd3c4"; if (b.count) c.fillText(String(b.count), x + Math.max(0, (bw - 6) / 2 - 4), y - 4);
+  });
+  c.fillStyle = "#8fa596";
+  bins.forEach((b, i) => {
+    const lbl = b.lo == null ? `≤${b.hi}` : b.hi == null ? `>${b.lo}` : `${b.hi}`;
+    const x = L + i * bw + bw / 2 - c.measureText(lbl).width / 2;
+    c.fillText(lbl, x, H - 18);
+  });
+  c.fillText("R per trade (bucket upper edge)", L, H - 3);
+}
 function niceStep(x) { const p = Math.pow(10, Math.floor(Math.log10(x))), f = x / p; return (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * p; }
-window.addEventListener("resize", () => { if (lastResult) drawChart(lastResult.trades || []); });
+let rzT = null;
+window.addEventListener("resize", () => { clearTimeout(rzT); rzT = setTimeout(() => { if (lastResult) { drawChart(lastResult); drawHist(lastResult); } }, 120); });
 
 // ---------- similar matches + live scan
 function renderSimilarMatches(o) {
@@ -758,6 +1018,29 @@ $("cmp-run").addEventListener("click", async () => {
   }
 });
 
+// ---------- empty-state example and error retry
+if ($("res-err-retry")) $("res-err-retry").addEventListener("click", () => run());
+if ($("try-example")) $("try-example").addEventListener("click", async () => {
+  const btn = $("try-example");
+  btn.disabled = true; btn.textContent = "Loading BTC price...";
+  try {
+    if (!markets.length) { const j = await (await fetch("/api/markets")).json(); markets = j.markets || []; }
+    const m = markets.find(x => x.coin === "BTCUSDT") || markets.find(x => /BTC/.test(x.symbol));
+    if (!m) throw new Error("BTC is not in the market list right now.");
+    pick(m.market_id);
+    const pj = await (await fetch("/api/price?market=" + encodeURIComponent(m.market_id))).json();
+    if (pj.error || !pj.price) throw new Error(pj.error || "price unavailable");
+    const p0 = pj.price, r = v => Math.round(v);
+    $("side").querySelector("[data-side=long]").click();
+    $("entry").value = r(p0 * 0.997); $("sl").value = r(p0 * 0.987); $("tp").value = r(p0 * 1.017);
+    clearUnsure(); updateRR();
+    showErr("");
+    $("run").scrollIntoView({ behavior: "smooth", block: "center" });
+    toast("Example filled in: BTC long, entry 0.3% under price, stop 1% below entry, target 2R. Press Run test.", "");
+  } catch (e) { toast(e.message, "Couldn't load the example."); }
+  finally { btn.disabled = false; btn.textContent = "Try an example: BTC long at the current price"; }
+});
+
 // ---------- prefill from URL (?market=BTC&side=short&entry=..&tp=..&sl=..&run=1)
 function applyQuery() {
   const q = new URLSearchParams(location.search);
@@ -781,6 +1064,9 @@ function applyQuery() {
   if (["limit", "sweep", "confirm"].includes(q.get("entry_style"))) $("entry-style").value = q.get("entry_style");
   if (q.get("insights") === "0") $("insights").checked = false;
   if (q.get("insights") === "1") $("insights").checked = true;
+  if (q.get("slippage") != null && q.get("slippage") !== "") $("slip").value = q.get("slippage");
+  if (["bps", "ticks"].includes(q.get("slippage_unit"))) $("slip-unit").value = q.get("slippage_unit");
+  if (q.get("overlap") === "1" && mode !== "pattern") $("overlap").checked = true;
   updateRR();
   if (q.get("run") === "1") run();
 }
