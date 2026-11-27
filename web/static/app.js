@@ -121,11 +121,38 @@ function syncPicks() {
 }
 function markUnsure(id, on) { const el = $(id); if (el) el.classList.toggle("unsure", !!on); }
 function clearUnsure() { ["market", "entry", "tp", "sl", "similar-tf"].forEach(id => markUnsure(id, false)); }
-function setShotFile(file) {
+function sniffImageMagic(buf) {
+  const b = new Uint8Array(buf);
+  if (b.length >= 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return "image/png";
+  if (b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "image/jpeg";
+  if (b.length >= 12 && b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 &&
+      b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return "image/webp";
+  if (b.length >= 6 && b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return "image/gif";
+  return null;
+}
+async function acceptShotFile(file) {
+  if (!file) return { ok: false, error: "Choose a chart screenshot first." };
+  if (file.size > 5 * 1024 * 1024) return { ok: false, error: "That image is too large. Use a PNG, JPG or WebP under 5 MB." };
+  const type = (file.type || "").toLowerCase();
+  if (type.startsWith("image/")) return { ok: true };
+  try {
+    const buf = await file.slice(0, 16).arrayBuffer();
+    if (sniffImageMagic(buf)) return { ok: true };
+  } catch (e) { /* fall through to a visible error */ }
+  if (/\.(png|jpe?g|webp|gif|heic|heif|bmp|avif)$/i.test(file.name || "")) return { ok: true };
+  return { ok: false, error: "Please upload a chart screenshot (PNG, JPG or WebP)." };
+}
+let shotSetTok = 0;
+async function setShotFile(file) {
   if (!file) return clearShotFile();
-  if (file.size > 5 * 1024 * 1024) return showShotErr("That image is too large. Use a PNG, JPG or WebP under 5 MB.");
-  const okType = /image\/(png|jpeg|webp)/.test(file.type) || /\.(png|jpe?g|webp)$/i.test(file.name || "");
-  if (!okType) return showShotErr("Please upload a PNG, JPG or WebP chart screenshot.");
+  const tok = ++shotSetTok;
+  const res = await acceptShotFile(file);
+  if (tok !== shotSetTok) return;
+  if (!res.ok) {
+    showShotErr(res.error);
+    toast(res.error, "Couldn't use that file.");
+    return;
+  }
   shotFile = file;
   if (shotUrl) URL.revokeObjectURL(shotUrl);
   shotUrl = URL.createObjectURL(file);
@@ -135,6 +162,8 @@ function setShotFile(file) {
   $("shot-size").textContent = kb >= 1024 ? (kb / 1024).toFixed(2) + " MB" : Math.max(1, Math.round(kb)) + " KB";
   $("shot-preview").hidden = false;
   $("shot-drop-txt").hidden = true;
+  const chooseTxt = document.querySelector(".shot-choose-txt");
+  if (chooseTxt) chooseTxt.textContent = "Replace file";
   showShotErr("");
 }
 function clearShotFile() {
@@ -144,6 +173,19 @@ function clearShotFile() {
   if ($("shot-thumb")) $("shot-thumb").removeAttribute("src");
   if ($("shot-preview")) $("shot-preview").hidden = true;
   if ($("shot-drop-txt")) $("shot-drop-txt").hidden = false;
+  const chooseTxt = document.querySelector(".shot-choose-txt");
+  if (chooseTxt) chooseTxt.textContent = "Choose file";
+}
+function onShotInputEvent() {
+  const inp = $("shot-file");
+  const f = inp && inp.files && inp.files[0];
+  if (f) setShotFile(f);
+  // Empty FileList (cancelled picker or a second open) must not wipe a preview already shown.
+}
+function syncShotFromInput() {
+  const inp = $("shot-file");
+  const f = inp && inp.files && inp.files[0];
+  if (f) setShotFile(f);
 }
 function applyShot(j) {
   clearUnsure();
@@ -224,8 +266,8 @@ function refreshShotStatus(force) {
 }
 if ($("shot-panel")) {
   refreshShotStatus(true);
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshShotStatus(); });
-  window.addEventListener("focus", () => refreshShotStatus());
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) { refreshShotStatus(); syncShotFromInput(); } });
+  window.addEventListener("focus", () => { refreshShotStatus(); syncShotFromInput(); });
   $("shot-panel").addEventListener("focusin", () => refreshShotStatus());
   $("shot-picks").addEventListener("click", e => {
     const b = e.target.closest("button[data-pattern]"); if (!b) return;
@@ -237,7 +279,7 @@ if ($("shot-panel")) {
   $("shot-drop").addEventListener("keydown", e => {
     if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("shot-file").focus(); $("shot-file").click(); }
   });
-  $("shot-file").addEventListener("change", () => { if ($("shot-file").files[0]) setShotFile($("shot-file").files[0]); });
+  ["change", "input"].forEach(ev => $("shot-file").addEventListener(ev, onShotInputEvent));
   $("shot-clear").addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); clearShotFile(); });
   ["dragenter", "dragover"].forEach(ev => $("shot-drop").addEventListener(ev, e => { e.preventDefault(); $("shot-drop").classList.add("drag"); }));
   ["dragleave", "drop"].forEach(ev => $("shot-drop").addEventListener(ev, e => { e.preventDefault(); $("shot-drop").classList.remove("drag"); }));
@@ -257,9 +299,10 @@ function setBusy(b) {
   else if (!hadResult) $("empty").hidden = false; else $("res").hidden = false;
   if (b && window.matchMedia("(max-width: 980px)").matches) $("results").scrollIntoView({ behavior: "smooth", block: "start" });
 }
-function toast(msg) {
+function toast(msg, title) {
   const t = document.createElement("div"); t.className = "toast"; t.setAttribute("role", "alert");
-  t.innerHTML = `<span><b>Test failed.</b> ${esc(msg)}</span><button type="button" aria-label="Dismiss">×</button>`;
+  const head = title === "" ? "" : `<b>${esc(title == null ? "Test failed." : title)}</b> `;
+  t.innerHTML = `<span>${head}${esc(msg)}</span><button type="button" aria-label="Dismiss">×</button>`;
   t.querySelector("button").onclick = () => t.remove();
   $("toasts").appendChild(t); setTimeout(() => t.remove(), 9000);
 }

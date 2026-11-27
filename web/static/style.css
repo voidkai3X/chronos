@@ -146,8 +146,11 @@ input[type=range]:focus-visible{outline:2px solid var(--cyan2);outline-offset:4p
 .shot-picks button.on{border-color:rgba(46,230,255,.45);color:var(--cyan);background:rgba(25,200,255,.12);box-shadow:0 0 12px rgba(46,230,255,.12)}
 .shot-drop{position:relative;display:block;margin-top:12px;border:1px dashed var(--line2);border-radius:12px;padding:16px 14px;text-align:center;cursor:pointer;background:rgba(14,22,30,.5);transition:border-color .15s,background .15s,box-shadow .15s}
 .shot-drop:hover,.shot-drop:focus-visible{border-color:var(--cyan2);box-shadow:0 0 0 3px rgba(25,200,255,.12);outline:none}
-/* Visually hidden, but not display:none / hidden: some Android browsers block programmatic clicks on those. */
-.shot-file{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap;border:0}
+.shot-choose{position:relative;margin-top:10px;min-height:48px;border-radius:12px;border:1px solid rgba(46,230,255,.45);background:rgba(25,200,255,.08);color:var(--cyan);font:650 15px var(--disp);letter-spacing:.04em;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.shot-choose:hover{background:rgba(25,200,255,.14)}
+.shot-choose-txt{pointer-events:none}
+/* Native file input stretched over the button. Opacity 0, but NOT display:none, visibility:hidden, or a 1px clip — those break Android / in-app browsers. */
+.shot-choose-input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:16px;margin:0;padding:0;border:0;background:transparent}
 .shot-drop.drag{border-color:var(--cyan);background:rgba(25,200,255,.08);box-shadow:0 0 0 3px rgba(25,200,255,.16)}
 .shot-drop b{display:block;font:600 13.5px var(--disp);color:var(--txt)}
 .shot-drop span{display:block;margin-top:4px;color:var(--mut);font-size:12px}

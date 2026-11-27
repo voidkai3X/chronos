@@ -54,7 +54,6 @@
             <button type="button" data-pattern="Order flow">Order flow</button>
           </div>
           <label class="shot-drop" id="shot-drop" for="shot-file" tabindex="0">
-            <input id="shot-file" class="shot-file" type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp">
             <div id="shot-drop-txt">
               <b>Drop a chart here or choose a file</b>
               <span>PNG, JPG or WebP, up to 5 MB</span>
@@ -68,6 +67,10 @@
               </div>
             </div>
           </label>
+          <div class="shot-choose" id="shot-choose">
+            <span class="shot-choose-txt">Choose file</span>
+            <input id="shot-file" class="shot-choose-input" type="file" accept="image/*,image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp">
+          </div>
           <button id="shot-run" class="run shot-run" type="button"><span class="spin" hidden></span><span class="txt">Read screenshot</span></button>
           <div id="shot-err" class="err" role="alert" hidden></div>
           <div id="shot-review" class="shot-review" hidden></div>

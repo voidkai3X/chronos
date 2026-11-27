@@ -281,6 +281,8 @@ Output includes orders, fills, unfilled orders, TP, SL and time exits; win rate 
 
 `python tests/test_screenshot.py` runs offline checks for screenshot reading (OpenAI is mocked): image type and size; fuzzy mapping of symbols such as `USD/JPY` and `BTC` onto MFP markets; missing prices stay blank; the review payload flags low-confidence and missing fields; the endpoint is disabled without `OPENAI_API_KEY`; friendly errors for a bad image or an unreadable chart; the screenshot route shares the heavy per-IP budget; and the daily cap is enforced.
 
+`python tests/test_shot_upload.py` checks the screenshot file picker: the file input is not nested inside the drop-zone label, both `input` and `change` are handled, empty MIME types are sniffed from magic bytes, and a Playwright Pixel run clicks the label and the Choose file control and shows a preview.
+
 `python tests/test_compare.py` runs offline checks for `--compare`: more than 5 other markets is rejected; transferred levels keep the same ATR shape and R:R at a different price and ATR; pooled closed trades, TP/SL/time exits and total R match the concatenated trade list; and the one-line summary counts only the other pairs.
 
 `python tests/test_entries.py` runs offline checks for the sweep and confirm entries:
