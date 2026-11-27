@@ -133,6 +133,7 @@ window.CHRONOS_PAGE = {
   },
   async api(path, opts) {
     opts = opts || {};
+    await ready;  // the CSRF token arrives with /api/auth/me
     const init = { method: opts.method || "GET", headers: {}, credentials: "same-origin" };
     if (opts.body !== undefined) { init.headers["Content-Type"] = "application/json"; init.body = JSON.stringify(opts.body); }
     let r;
@@ -146,5 +147,5 @@ window.CHRONOS_PAGE = {
   },
   esc: s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])),
 };
-loadMe();
+const ready = loadMe();
 })();

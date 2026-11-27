@@ -73,7 +73,7 @@
       <p>Sign in to keep a journal. Entries are private to your account and can be exported or deleted at any time.</p>
       <div class="gate-btns"><a class="btn-acc primary" href="/signin?next=/journal">Sign in</a><a class="btn-ghost" href="/signup?next=/journal">Create an account</a></div>
     </div>
-    <form id="jn-form" autocomplete="off" novalidate>
+    <form id="jn-form" autocomplete="off" novalidate hidden>
       <div class="grid2">
         <div><label class="lbl" for="j-market">Instrument</label><input id="j-market" type="text" maxlength="40" required placeholder="e.g. BTCUSDT" autocapitalize="characters" spellcheck="false"></div>
         <div><span class="lbl">Direction</span><div class="toggle seg" id="j-side" role="group" aria-label="Direction"><button type="button" data-s="long" class="on long" aria-pressed="true">Long</button><button type="button" data-s="short" aria-pressed="false">Short</button></div></div>
