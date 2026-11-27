@@ -50,6 +50,7 @@ users = Table(
 
 _engine = None
 _engine_lock = threading.Lock()
+AFTER_CREATE = []  # callables run with the engine right after create_all (additive, idempotent fix-ups)
 _hits_lock = threading.Lock()
 _hits = {}  # key -> [timestamps]
 # a real scrypt hash so unknown emails take the same time as wrong passwords
@@ -88,6 +89,8 @@ def engine():
                 kw.update(pool_size=3, max_overflow=2, pool_recycle=300)
             _engine = create_engine(url, **kw)
             metadata.create_all(_engine)
+            for hook in AFTER_CREATE:
+                hook(_engine)
         return _engine
 
 

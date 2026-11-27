@@ -20,7 +20,7 @@ import math
 import random
 
 from flask import Blueprint, jsonify, request
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Table, Text, delete, func, insert, select, update
+from sqlalchemy import BigInteger, Column, DateTime, Float, ForeignKey, Integer, String, Table, Text, delete, func, insert, select, update
 
 import auth
 
@@ -74,12 +74,12 @@ practice_trades = Table(
     Column("risk_amount", Float, nullable=True),
     Column("units", Float, nullable=True),
     Column("placed_idx", Integer, nullable=False),
-    Column("placed_ms", Integer, nullable=False),
+    Column("placed_ms", BigInteger, nullable=False),
     Column("fill_idx", Integer, nullable=True),
-    Column("fill_ms", Integer, nullable=True),
+    Column("fill_ms", BigInteger, nullable=True),
     Column("fill_price", Float, nullable=True),
     Column("exit_idx", Integer, nullable=True),
-    Column("exit_ms", Integer, nullable=True),
+    Column("exit_ms", BigInteger, nullable=True),
     Column("exit_price", Float, nullable=True),
     Column("exit_reason", String(16), nullable=True),       # tp | sl | gap_sl | manual | end | cancelled
     Column("r_gross", Float, nullable=True),
@@ -94,6 +94,30 @@ practice_trades = Table(
 bp = Blueprint("practice", __name__)
 # app.py fills these in (rate limits, per-market lock, market resolver); tests may replace fetch_bars.
 HOOKS = {}
+
+
+MS_COLUMNS = ("placed_ms", "fill_ms", "exit_ms")
+
+
+def widen_ms_columns(eng):
+    """Postgres only: the first release created the millisecond-timestamp columns as INTEGER (32-bit),
+    which cannot hold epoch milliseconds. Widen them to BIGINT in place. Widening keeps every value,
+    touches no other table and is skipped once the columns are already BIGINT (or on SQLite, where
+    INTEGER is already 64-bit)."""
+    if eng.dialect.name != "postgresql":
+        return
+    from sqlalchemy import text
+    with eng.begin() as c:
+        rows = c.execute(text(
+            "SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() "
+            "AND table_name = 'practice_trades' AND data_type = 'integer' AND column_name IN ('placed_ms', 'fill_ms', 'exit_ms')"
+        )).scalars().all()
+        for col in rows:
+            if col in MS_COLUMNS:
+                c.execute(text(f'ALTER TABLE practice_trades ALTER COLUMN "{col}" TYPE BIGINT'))
+
+
+auth.AFTER_CREATE.append(widen_ms_columns)
 
 
 def fetch_bars(m, interval, from_ms, to_ms):
